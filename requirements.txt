@@ -1,0 +1,14 @@
+# PyTorch Biaffine Dependency Parsing —— 依赖
+# 用法：
+#   conda activate <env>     或     .venv\Scripts\Activate.ps1
+#   pip install -r requirements.txt
+#
+# 说明：
+#   - torch 版本宽松，CPU/GPU 都能跑；服务器 4 上已有 ljz_env / research_env 内置 torch 2.x
+#   - matplotlib 用于绘 loss / UAS-LAS 曲线（DataUtils/Logger.py）
+#   - tqdm 仅 DataUtils/Embed.py 加载词向量进度条用；可选
+
+torch>=1.10
+numpy>=1.19
+tqdm>=4.50
+matplotlib>=3.3
