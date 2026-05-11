@@ -2,6 +2,9 @@
 import torch.optim
 from torch.nn.utils.clip_grad import clip_grad_norm_
 
+# Stage 2 新增: Muon 优化器(Keller Jordan 2024)
+from DataUtils.MuonOptimizer import MuonWithAdamW
+
 # Setup optimizer (should always come after model.cuda())
 # iterable of dicts for per-param options where each dict
 # is {'params' : [p1, p2, p3...]}.update(generic optimizer args)
@@ -28,6 +31,8 @@ def decay_learning_rate(optimizer, epoch, init_lr, lr_decay):
 
 class Optimizer(object):
     # Class dict to map lowercase identifiers to actual classes
+    # Stage 2 新增: 'Muon' 入口指向 MuonWithAdamW 包装器
+    # 注意: Muon 不接受 param_groups,需要 named_params; 在 __init__ 中 special-case
     methods = {
         'Adadelta':   torch.optim.Adadelta,
         'Adagrad':    torch.optim.Adagrad,
@@ -36,6 +41,7 @@ class Optimizer(object):
         'ASGD':       torch.optim.ASGD,
         'Rprop':      torch.optim.Rprop,
         'RMSprop':    torch.optim.RMSprop,
+        'Muon':       MuonWithAdamW,
     }
 
     @staticmethod
@@ -115,8 +121,23 @@ class Optimizer(object):
         assert n_params == 0, "Not all params are passed to the optimizer."
 
         # Create the actual optimizer
-        self.optim = self.methods[self.name](self.param_groups,
-                                             **self.optim_args)
+        # Muon 需要按 param name 分组(embedding -> AdamW, 矩阵 -> Muon),
+        # 现有 param_groups 是按 bias/weight 分组的,不够细。
+        # 所以 Muon 走 from_named_parameters,其他优化器仍走 param_groups 路径。
+        if self.name == "Muon":
+            self.optim = MuonWithAdamW.from_named_parameters(
+                self.named_params,
+                lr=self.init_lr if self.init_lr > 0 else 0.02,
+                lr_adamw=3e-4,
+                weight_decay=self.weight_decay if self.weight_decay > 0 else 0.0,
+            )
+            # 让外层 param_groups 直接反映 MuonWithAdamW 内部的混合分组
+            # (rescale_lrate / set_lrate 通过 self.optim.param_groups 修改,而
+            #  trainer._current_lr 用 self.optimizer.param_groups[0]['lr'] 读取)
+            self.param_groups = self.optim.param_groups
+        else:
+            self.optim = self.methods[self.name](self.param_groups,
+                                                 **self.optim_args)
 
         # Assign shortcuts
         self.zero_grad = self.optim.zero_grad

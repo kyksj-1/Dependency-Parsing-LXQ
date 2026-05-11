@@ -160,17 +160,21 @@ def pre_embed(config, alphabet):
 # ---------------------------------------------------------------------------
 def get_learning_algorithm(config):
     """
-    旧版用 adam=True/sgd=True 两个布尔位互斥，逻辑脆弱；这里加显式校验。
-    若两个都 True 或都 False，按 adam > sgd 优先级取一个并打印警告。
+    旧版用 adam=True/sgd=True 两个布尔位互斥,逻辑脆弱;这里加显式校验。
+    Stage 2 扩展:支持 muon 第三个选项 (Keller Jordan 2024)。
+
+    优先级:同时多个为 True 时按 muon > adam > sgd 取一个并打印警告。
     """
-    if config.adam and config.sgd:
-        print("[WARN] config 中 adam 和 sgd 同时为 True，强制使用 Adam。")
-        return "Adam"
+    n_true = int(config.adam) + int(config.sgd) + int(config.muon)
+    if n_true > 1:
+        print("[WARN] adam/sgd/muon 同时多于一个为 True, 优先 muon > adam > sgd")
+    if config.muon:
+        return "Muon"
     if config.adam:
         return "Adam"
     if config.sgd:
         return "SGD"
-    print("[WARN] config 中 adam/sgd 都为 False，默认用 Adam。")
+    print("[WARN] adam/sgd/muon 都为 False, 默认用 Adam。")
     return "Adam"
 
 

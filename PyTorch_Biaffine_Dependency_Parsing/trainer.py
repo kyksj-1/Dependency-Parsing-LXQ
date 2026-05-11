@@ -57,8 +57,16 @@ class Train(object):
         # ---- 优化器 ----
         # SGD/Adam 公用 Optimizer 包装；旧版的 betas=(0.9,0.9) 来自 Dozat 论文，
         # 与 PyTorch 默认 (0.9, 0.999) 不同，对句法依存任务实测更稳定，保留。
+        # Stage 2 新增 Muon (Keller Jordan 2024):矩阵参数走 Newton-Schulz 正交化,
+        # 1D / embedding 走 AdamW fallback。lr 默认 0.02 (Muon 主干),不需要外加 grad clip。
         if self.config.learning_algorithm == "SGD":
             self.optimizer = Optimizer(name="SGD", model=self.parser.model,
+                                       lr=self.config.learning_rate,
+                                       weight_decay=self.config.weight_decay,
+                                       grad_clip="None")
+        elif self.config.learning_algorithm == "Muon":
+            # Muon 内部 NS 已经约束矩阵谱范数,外层 grad clip 反而干扰更新方向,关闭
+            self.optimizer = Optimizer(name="Muon", model=self.parser.model,
                                        lr=self.config.learning_rate,
                                        weight_decay=self.config.weight_decay,
                                        grad_clip="None")
