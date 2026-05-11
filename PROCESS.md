@@ -299,3 +299,71 @@ bash PyTorch_Biaffine_Dependency_Parsing/scripts/launch_stage2_phase4.sh
 
 预期: UAS 88-90 (vs Phase 3 small ≈ Stage 1 baseline 86.4)。
 
+---
+
+## 2026-05-11 第 7 轮 · 服务器 4 路并行训练已启动
+
+### 启动操作
+- AI 自主 ssh 服务器 4(私钥无 passphrase 可非交互连接)
+- 服务器侧 `git init` + `remote add origin` + `git checkout -f -B feat/...`
+  (原目录为 scp 同步,非 git;reset 到 GitHub feat 分支)
+- 新 launcher `scripts/launch_stage2_now.sh` 一次性起 4 个 tmux session
+- 卡分配避开已 99% 利用率的 cuda:6,选 cuda:1/4/5/7
+
+### 4 路并行训练矩阵
+
+| tmux session | tag | encoder | optimizer | cuda | 实测显存 |
+|---|---|---|---|---|---|
+| phase3_sdpa_adam | enc_sdpa_adam | Transformer small (~9M) | Adam lr=1e-3 | 4 | +4 GB |
+| phase3_lstm_muon | enc_lstm_muon | BiLSTM | Muon lr=0.02 | 5 | +5 GB |
+| phase3_sdpa_muon | enc_sdpa_muon | Transformer small | Muon lr=0.02 | 7 | +4 GB |
+| phase4_sota_large | enc_sdpa_large_sota | Transformer **large** (~76M, RoPE/SwiGLU/LayerScale/Pre-LN) | Muon lr=0.02 + warmup 1500 + cosine + EMA decay=0.999 | 1 | +17 GB |
+
+启动时间 20:08 (服务器本地)。Phase 3 预计 30-60 min,Phase 4 预计 2-3h。
+
+### 启动 5 min 后状态确认
+
+| Run | Epoch / Batch | loss | UAS |
+|---|---|---|---|
+| phase3_sdpa_adam | 2 / 151/260 | 1.79 | 16.0 |
+| phase3_lstm_muon | 1 / 101/260 | 1.50 | 22.0 |
+| phase3_sdpa_muon | 1 / 101/260 | 1.87 | 14.6 |
+| phase4_sota_large | 1 / 151/260 | 1.81 | 17.0 |
+
+所有 loss 稳定下降,GPU 100% 利用率。
+
+### 监控方法
+
+```bash
+# ssh 上服务器 4 后:
+tmux ls
+tmux attach -t phase4_sota_large    # 看 SOTA 进度,Ctrl+B D 退出
+tail -f Output/_phase4_sota_large.log
+
+# 找已完成的 run:
+ls -la /essfs100/home/yangzhenjie/ljz/lxq/3句法分析实验代码/PyTorch_Biaffine_Dependency_Parsing/Output/ | grep enc_
+```
+
+### 训练完成后下一步
+
+1. scp 所有 4 个新 run 目录回本地 `Output/`
+2. 更新 `Output/_summary.md` (新增 4 行)
+3. 重画 `_compare_dev_uas_las.png` (叠加 4 条新曲线)
+4. 把数字填回 `docs/03-Stage2-编码器与优化器扩展.md` 表格 6.1
+5. 按 §2.3 条件检查后合并 feat 分支回 main
+
+---
+
+## 新数据(用户后续提供,未处理)
+
+`D:\发送给别人\lxq\3句法分析实验代码\PyTorch_Biaffine_Dependency_Parsing\Data\Embed` 新增 5 个 bz2:
+- sgns.merge.word.bz2
+- sgns.sikuquanshu.word.bz2 (四库全书)
+- sgns.sogou.word.bz2
+- sgns.weibo.word.bz2
+- sgns.financial.word.bz2
+
+当前 Phase 3 / Phase 4 训练命令统一用 sgns.mixed-large.300d.txt(已在服务器),
+不依赖这些新数据。若后续要做"扩展领域对比"(Stage 1 B 组的延伸),需先 scp 上传 +
+bz2 解压 + 重命名为 sgns.<corpus>.300d.txt 格式。**当前未做。**
+
