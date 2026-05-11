@@ -235,3 +235,67 @@ Phase 6 · 条件合并到 main          ─ T6
 - 工作区在启动前删除了未追踪的 `upload_to_hf.py`（含明文 HF Write Token）。建议本地已经接触过该 token 的用户去 HuggingFace revoke 旧 token 重新生成。
 - 创建子分支 `feat/stage2-sdpa-muon-20260511`（基于当前 main），按 CLAUDE.md §2.1 规范。
 
+---
+
+## 2026-05-11 第 6 轮 · Stage 2 代码侧完成 + 服务器 launcher 准备
+
+### Phase 0-4 代码侧产出
+
+| 模块 | 文件 | 单测 | 状态 |
+|---|---|---|---|
+| **Phase 1** SDPA encoder (small ~9M) | `Model/Biaffine_Parsing/TransformerEncoder.py` | 7/7 | ✅ |
+| **Phase 2** Muon optimizer + AdamW fallback | `DataUtils/MuonOptimizer.py` + Optim.py / mainHelp.py 接入 | 9/9 | ✅ |
+| **Phase 4.1** SOTA encoder (large ~76M, RoPE+SwiGLU+LayerScale+Pre-LN) | `Model/Biaffine_Parsing/TransformerEncoderLarge.py` | 14/14 | ✅ |
+| **Phase 4.2** Warmup+Cosine schedule | `DataUtils/Scheduler.py` | 3/3 | ✅ |
+| **Phase 4.2** EMA weight averaging | `DataUtils/EMA.py` | 3/3 | ✅ |
+| Config 扩展 | `Config/config.cfg` + `Config/config.py` | — | ✅ |
+| Model dispatch | `Model/Biaffine_Parsing/Model.py` (encoder_type: lstm/transformer/transformer_large) | — | ✅ |
+| Trainer 整合 | `trainer.py` (scheduler/EMA 在 large run 启用) | — | ✅ |
+| 服务器 launcher | `scripts/launch_stage2_phase3.sh` + `scripts/launch_stage2_phase4.sh` | — | ✅ |
+
+**总单测**: 36/36 通过（research_env / RTX 4060 本地）。**端到端冒烟矩阵**:
+
+| encoder | optimizer | extras | epoch loss 变化 | 备注 |
+|---|---|---|---|---|
+| lstm | adam | — | baseline 不变 | 回归测试 |
+| transformer (small) | adam | — | 1.086 → 1.066 | Phase 3 通路 |
+| lstm | muon | — | 1.086 → 1.084 | Phase 3 通路 |
+| transformer (small) | muon | — | 1.086 → 1.042 | Phase 3 通路 |
+| transformer_large | muon | warmup+cosine+EMA | 1.086 → 1.064 → 1.012 | Phase 4 完整链路 |
+
+### 弃用的 trick (用户提议但评估后弃用)
+
+| Trick | 评估结论 |
+|---|---|
+| MoE (Mixture of Experts) | 8.3K 句训练集 router 极易塌缩,门槛在 100B+ token,差 5 个数量级 |
+| Linear Attention | 句子最长 200 词,O(L²) 已极便宜,linear 是换表达力换速度,反向收益 |
+| mHC connection (arxiv 2512.24880) | 2025-12 论文太新,LLM-corpus 验证,小数据 NLP 经典任务迁移性未知,时间不允许精读+调试 |
+| Gate Attention (OpenReview 1b7whO4SfY) | 与已采用的 LayerScale 功能重叠,后者 timm 验证更充分 |
+
+### Phase 3 训练矩阵（待用户在服务器 4 上启动）
+
+```bash
+ssh -i ~/.ssh/yangzhenjie_inspire_id_ed25519 -p 5052 yangzhenjie@112.25.93.66
+cd /essfs100/home/yangzhenjie/ljz/lxq/3句法分析实验代码
+git fetch origin && git checkout feat/stage2-sdpa-muon-20260511 && git pull
+bash PyTorch_Biaffine_Dependency_Parsing/scripts/launch_stage2_phase3.sh
+```
+
+| Run | tag | encoder | optimizer | cuda | 预计 |
+|---|---|---|---|---|---|
+| 7 | `enc_sdpa_adam` | Transformer small (~9M) | Adam lr=1e-3 | 0 | 30-60 min |
+| 8 | `enc_lstm_muon` | BiLSTM | Muon lr=0.02 | 1 | 30-60 min |
+| 9 | `enc_sdpa_muon` | Transformer small | Muon lr=0.02 | 2 | 30-60 min |
+
+### Phase 4 大参数量 SOTA run（Phase 3 完成后启动）
+
+```bash
+bash PyTorch_Biaffine_Dependency_Parsing/scripts/launch_stage2_phase4.sh
+```
+
+| Run | tag | encoder | optimizer | extras | 预计 |
+|---|---|---|---|---|---|
+| 10 | `enc_sdpa_large_sota` | Transformer **large** (~76M, RoPE+SwiGLU+LayerScale+Pre-LN) | Muon lr=0.02 | warmup 1500 + cosine + EMA decay=0.999 + dropout 0.4 + emb_dropout 0.5 | 2-3 h |
+
+预期: UAS 88-90 (vs Phase 3 small ≈ Stage 1 baseline 86.4)。
+
