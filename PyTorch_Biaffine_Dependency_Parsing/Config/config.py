@@ -288,6 +288,35 @@ class Configurable(myconf):
     def encoder_activation(self) -> str:
         return self._config.get("Encoder", "activation").lower()
 
+    # ---- Phase 4 large 配置 (type=transformer_large 时生效) ----
+    @property
+    def large_d_model(self) -> int:
+        return self._config.getint("Encoder", "large_d_model")
+
+    @property
+    def large_nhead(self) -> int:
+        return self._config.getint("Encoder", "large_nhead")
+
+    @property
+    def large_num_layers(self) -> int:
+        return self._config.getint("Encoder", "large_num_layers")
+
+    @property
+    def large_ff_size(self) -> int:
+        return self._config.getint("Encoder", "large_ff_size")
+
+    @property
+    def large_dropout(self) -> float:
+        return self._config.getfloat("Encoder", "large_dropout")
+
+    @property
+    def large_layerscale_init(self) -> float:
+        return self._config.getfloat("Encoder", "large_layerscale_init")
+
+    @property
+    def large_use_rope(self) -> bool:
+        return self._config.getboolean("Encoder", "large_use_rope")
+
     # Optimizer
     @property
     def adam(self):
@@ -368,3 +397,28 @@ class Configurable(myconf):
     @property
     def log_interval(self):
         return self._config.getint("Train", "log_interval")
+
+    # ---- Phase 4 SOTA 训练增强 (默认关闭) ----
+    @property
+    def use_warmup_cosine(self) -> bool:
+        if not self._config.has_option("Train", "use_warmup_cosine"):
+            return False
+        return self._config.getboolean("Train", "use_warmup_cosine")
+
+    @property
+    def warmup_steps(self) -> int:
+        return self._config.getint("Train", "warmup_steps")
+
+    @property
+    def min_lr_ratio(self) -> float:
+        return self._config.getfloat("Train", "min_lr_ratio")
+
+    @property
+    def use_ema(self) -> bool:
+        if not self._config.has_option("Train", "use_ema"):
+            return False
+        return self._config.getboolean("Train", "use_ema")
+
+    @property
+    def ema_decay(self) -> float:
+        return self._config.getfloat("Train", "ema_decay")
