@@ -184,3 +184,54 @@ Output/<时间戳>/
 3. 报告里需要写"伪代码"那一块，用 `docs/02-句法分析实验任务详解.md` 第三章 Biaffine 算法核心思想改写
 4. 论文 / 代码引用：Dozat & Manning 2017 ICLR
 5. 若想冲更高分（可选）：换 nn.LSTM + warmup，预期 UAS 能到 88+；或加 BERT-base-chinese 编码器到 92+。
+
+---
+
+## 2026-05-11 第 5 轮 · Stage 2 启动（编码器消融 + 优化器扩展）
+
+### 决策与方案
+
+Stage 1 三组对比（维度 / 领域 / 优化器）+ from-scratch 下界已完成；剩余 3 天（截止 2026-05-14）做 Stage 2 进阶。方向锁定：
+
+- **A. Transformer/SDPA 编码器对比** —— 用 `nn.TransformerEncoder` 替换 `MyLSTM`，保留 embedding + Biaffine + MST 整条解码链路不动，做干净的编码器消融。对应文献：Dozat & Manning 2017 ICLR → Mrini et al. 2020 / Cui et al. 2022 把 BiLSTM 替换为 SDPA 的演进路线。
+- **B. Muon 优化器扩展** —— 在 Stage 1 的 Adam / SGD 之外加入 Muon（Keller Jordan 2024），把"优化器"对比维度从 2 扩到 3。Muon 对 2D 矩阵参数走 Newton-Schulz 5 阶迭代正交化，1D 参数 fallback 到 AdamW。
+
+### 子任务拆解（17 项，TaskList 已建立）
+
+```
+Phase 0 · 分支与准备                ─ T0.1 T0.2 T0.3
+Phase 1 · TransformerEncoder       ─ T1.1 T1.2 T1.3 T1.4 T1.5
+Phase 2 · Muon Optimizer           ─ T2.1 T2.2 T2.3
+Phase 3 · 服务器 3 路并行训练矩阵  ─ T3
+Phase 3.5 · 暂停 + 用户讨论        ─ T3.5（大参数量 SOTA run 方案）
+Phase 4 · 大参数量 SDPA SOTA run   ─ T4（叠加 warmup / RoPE / LayerScale 等）
+Phase 5 · 汇总 + 文档              ─ T5.1 T5.2
+Phase 6 · 条件合并到 main          ─ T6
+```
+
+### 关键决策（用户已确认）
+
+| 项 | 值 |
+|---|---|
+| Transformer 参数量目标（Phase 3） | ≈ 与 BiLSTM 同量级 13M（d_model=512 / nhead=8 / layers=4 / ff=1024）|
+| Transformer 参数量目标（Phase 4） | 大参数量 SOTA 级，具体规模在 Phase 3.5 与用户讨论后定 |
+| Positional encoding | sinusoidal |
+| Muon lr | 0.02（Keller Jordan 默认）|
+| Muon fallback | AdamW(lr=3e-4) 仅作用于 1D 参数 |
+| 本地开发环境 | conda `research_env` + 本地 GPU |
+| 服务器训练环境 | 服务器 4 / `ljz_env` / cuda:0/1/2 三路并行 |
+
+### 训练矩阵设计（Phase 3：3 主 run + 1 SOTA run）
+
+| Run | tag | encoder | optimizer | 作用 | 启动时机 |
+|---|---|---|---|---|---|
+| 7 | `enc_sdpa_adam` | Transformer (small) | Adam | SDPA vs BiLSTM | Phase 3 |
+| 8 | `enc_lstm_muon` | BiLSTM | Muon | Muon vs Adam | Phase 3 |
+| 9 | `enc_sdpa_muon` | Transformer (small) | Muon | 交叉点 | Phase 3 |
+| 10 | `enc_sdpa_large_sota` | Transformer (large + SOTA tricks) | TBD | 冲高分 | Phase 4（待讨论）|
+
+### 安全与卫生
+
+- 工作区在启动前删除了未追踪的 `upload_to_hf.py`（含明文 HF Write Token）。建议本地已经接触过该 token 的用户去 HuggingFace revoke 旧 token 重新生成。
+- 创建子分支 `feat/stage2-sdpa-muon-20260511`（基于当前 main），按 CLAUDE.md §2.1 规范。
+
