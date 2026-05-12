@@ -367,3 +367,53 @@ ls -la /essfs100/home/yangzhenjie/ljz/lxq/3句法分析实验代码/PyTorch_Biaf
 不依赖这些新数据。若后续要做"扩展领域对比"(Stage 1 B 组的延伸),需先 scp 上传 +
 bz2 解压 + 重命名为 sgns.<corpus>.300d.txt 格式。**当前未做。**
 
+---
+
+## 2026-05-12 第 8 轮 · 训练完成 + 故障诊断 + v2 救场启动
+
+### 第一轮训练结果(2026-05-12 早晨收割)
+
+| ID | tag | encoder | optimizer | best dev UAS | epochs | 状态 |
+|---|---|---|---|---|---|---|
+| 7 | enc_sdpa_adam | Transformer small (Post-LN) | Adam | **12.20** | 23 (早停) | 🚨 完全不收敛 |
+| 8 | enc_lstm_muon | BiLSTM | Muon | **85.51** | 50 | ✅ 健康 |
+| 9 | enc_sdpa_muon | Transformer small (Post-LN) | Muon | **53.35** | 25 (早停) | ⚠️ 早期到 53 后退化 |
+| 10 | enc_sdpa_large_sota | Transformer large (Pre-LN+RoPE+SwiGLU+LayerScale) | Muon+warmup+EMA | **83.92** | 99 | ⚠️ 仍低于 baseline 2.5 点 |
+
+### Root Cause 诊断: Phase 3 small SDPA 用 Post-LN 无 warmup
+
+- enc_sdpa_adam train UAS 始终 1-3% 纯随机,模型彻底没学习
+- enc_sdpa_muon epoch 5 后 dev UAS 从 53 → 43,典型不稳定退化
+- enc_sdpa_large_sota 用了 Pre-LN+warmup+cosine+EMA 反而能 84,印证 Pre-LN+warmup 必需
+- **教训**: 我之前为"对齐 Vaswani 原版"选 Post-LN 是错误判断。Phase 3 small 也该用 Pre-LN+warmup。
+
+### v2 救场启动 (12:00 启动)
+
+- rescue_sdpa_adam_v2  (cuda:4) Pre-LN + warmup 500 + Adam     - 50 epoch
+- rescue_sdpa_muon_v2  (cuda:5) Pre-LN + warmup 500 + Muon     - 50 epoch (可能早停)
+- rescue_lstm_muon_v2  (cuda:7) warmup 500 + Muon              - 100 epoch (试图超 85.51)
+- rescue_sdpa_muon_v3  (cuda:0) Pre-LN + warmup 1000 + Muon lr=0.005 - 50 epoch (v2 lr 太大的备份方案)
+
+### 操作事故记录
+
+1. **inline ssh 命令双引号 quoting 失败**: 嵌套 quoting 让 conda init 被截断, tmux session 起来直接 "command not found" 退出。**经验**: PowerShell -> ssh -> tmux 三层 quoting 不可靠, 应当用独立 .sh + scp 或 git。
+
+2. **bash launcher v3 触发 v2 session 重启**: 原 launch_stage2_rescue.sh 主体没有 conditional guard, 任何参数都会先 kill+restart v2 三个 session。**损失约 35 min v2 训练进度**。修复: 拆出独立 launch_v3_only.sh。
+
+3. **git pull HTTP/2 错误**: GitHub 偶发 RPC failure。**修复**: 用 for retry 循环或 scp 直接传文件绕过 git。
+
+### 中期数字 (12:13)
+- sdpa_adam_v2: epoch ~9 dev UAS 69.43 (持续涨,预计 50 epoch 到 82-85)
+- sdpa_muon_v2: peak epoch 5 UAS 53.35, 早停在即
+- lstm_muon_v2: epoch ~5 dev UAS 68.51 (100 epoch 跑 5h)
+- sdpa_muon_v3: 刚启动
+
+### 待办
+
+1. ⏳ 等 13:00 左右 3 个 small 50-epoch 训练完成
+2. 重新画 _compare_stage2.png (扩展到 14 路曲线)
+3. 更新 _summary.md 加 v2/v3 数字
+4. 等 17:00 左右 lstm_muon_v2 100 epoch 完成
+5. 整合所有数字到 docs/03
+6. 按 §2.3 条件检查后合并到 main
+
