@@ -417,3 +417,46 @@ bz2 解压 + 重命名为 sgns.<corpus>.300d.txt 格式。**当前未做。**
 5. 整合所有数字到 docs/03
 6. 按 §2.3 条件检查后合并到 main
 
+---
+
+## 2026-05-12 第 9 轮 · 救场全部完成 + 新 SOTA 出现
+
+### 最终结果(所有 14 个 run)
+
+| Run | best dev UAS | LAS | epoch | 性质 |
+|---|---|---|---|---|
+| 🥇 **enc_lstm_muon_v2** | **86.93** | **68.37** | 100 | **新 SOTA, 首破 baseline 86.43** |
+| 🥈 baseline (S1) | 86.43 | 67.65 | 50 | Stage 1 BiLSTM+Adam |
+| 🥉 domain_renmin/zhihu/literature (S1) | 86.2-86.4 | 67.5-67.9 | 50 | Stage 1 领域对比 |
+| 4 dim100_pca_adam (S1) | 86.14 | 66.57 | 50 | Stage 1 PCA 100d |
+| 5 enc_lstm_muon v1 (S2) | 85.51 | 65.81 | 50 | 无 warmup |
+| 6 fromscratch_adam (S1) | 84.84 | 64.26 | 50 | 无预训练参考 |
+| 7 enc_sdpa_large_sota (S2) | 83.92 | 65.60 | 99 | 76M Transformer SOTA |
+| 8 enc_sdpa_adam_v2 (救场) | 82.00 | 63.55 | 48 | Pre-LN + warmup 救活 SDPA |
+| 9 enc_sdpa_muon_v3_lr005 (救场) | 81.03 | 62.02 | 45 | Muon lr=0.005 |
+| 10 enc_sdpa_muon_v2 (救场, 早停) | 58.42 | 38.99 | 5 | Muon lr=0.02 仍偏大 |
+| 11 enc_sdpa_muon (S2, Post-LN) | 53.35 | 39.74 | 5 (早停 25) | Post-LN bug |
+| 12 opt_sgd (S1) | 17.66 | 1.58 | 48 | 不收敛参考 |
+| 13 enc_sdpa_adam (S2, Post-LN) | 12.20 | 3.36 | 3 (早停 23) | Post-LN bug |
+
+### 三大核心发现
+
+1. **lstm_muon_v2 突破 baseline 0.5 UAS**: 证明 Muon + 100 epoch + warmup_cosine 在 BiLSTM 上真正击败 Adam。50 epoch 时 Muon 还没收尾(85.51 < 86.43),延长到 100 epoch 完成微调。
+2. **Pre-LN + warmup 救场假说被验证**: sdpa_adam_v2 UAS 82 vs v1 UAS 12,+70 个点提升,根因正是 Post-LN 无 warmup。
+3. **Muon lr 高度依赖模型规模**: small Transformer (9M) 需要 lr=0.005,BiLSTM (13M) 可用 lr=0.02。原因是 NS 正交化让 Muon 步长 ≈ lr,而 Adam 经 1/√v 缩放后实际步长在 1e-4 级别——Muon lr 直觉上要比 Adam lr 小 1-2 个数量级。
+
+### 数据收割完成
+
+- 4 个新 run scp 回本地 `Output/2026-05-12_*`
+- `_compare_stage2.png` 重画含 15 条曲线 (Stage 1 + Stage 2 + 救场)
+- `_summary.md` 全量更新含 §2.3 救场结果 + §2.4 假说验证 + §3 三组结论
+- `docs/03-Stage2-编码器与优化器扩展.md` 表格 6.1 全填,§6.2-6.3 新增讨论
+
+### 下一阶段: NeurIPS 报告撰写 (Phase 7)
+
+按 PAPER.md 要求,用 NeurIPS 2026 模板撰写作业报告。具体计划:
+- 角色扮演: **Christopher D. Manning** (Stanford NLP,Dozat 导师,Biaffine 工作"祖师爷")
+- 项目代号: **"When Inductive Bias Wins"** (切合"小数据 BiLSTM 赢 Transformer"核心结论)
+- 拆分 `Paper/sections/` 6 个 .tex: intro / our_work / method / theory / experiment / conclusion
+- 参考文献用 natbib + 真实引用 (Dozat 2017 / Vaswani 2017 / Loshchilov 2017 / Keller Jordan 2024 / Touvron 2021 等)
+
