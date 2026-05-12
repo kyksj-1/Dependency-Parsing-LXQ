@@ -65,6 +65,20 @@ tmux kill-session -t "$SESSION" 2>/dev/null || true
 tmux new-session -d -s "$SESSION" "$CMD; echo '=== DONE ==='; sleep 86400"
 echo "[OK] 启动 $SESSION (cuda:7)"
 
+# ============================================================================
+# R4 (v3): SDPA small + Pre-LN + Muon + smaller lr  on cuda:6 (if free) or as
+#          followup after sdpa_muon_v2 early-stops on cuda:5
+# 启动用法: bash <script> v3   (单独跑这一路)
+# ============================================================================
+if [ "${1:-}" = "v3" ]; then
+    SESSION="rescue_sdpa_muon_v3"
+    CMD="cd $ROOT && $CONDA_INIT && python -u main.py --device cuda:5 --tag enc_sdpa_muon_v3_lr005 --override Encoder.type=transformer Encoder.norm_first=True Optimizer.adam=False Optimizer.muon=True Optimizer.sgd=False Optimizer.learning_rate=0.005 Train.use_warmup_cosine=True Train.warmup_steps=1000 Train.min_lr_ratio=0.05 $COMMON_BASE 2>&1 | tee Output/_rescue_sdpa_muon_v3.log"
+    tmux kill-session -t "$SESSION" 2>/dev/null || true
+    tmux new-session -d -s "$SESSION" "$CMD; echo '=== DONE ==='; sleep 86400"
+    echo "[OK] 启动 $SESSION (cuda:5, lr=0.005, warmup 1000)"
+    exit 0
+fi
+
 echo
 echo "========================================================================"
 echo "v2 救场训练已启动 3 路"
