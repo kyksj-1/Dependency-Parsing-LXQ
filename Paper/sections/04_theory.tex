@@ -1,0 +1,64 @@
+\section{Theory}
+\label{sec:theory}
+
+This section develops the three pieces of mathematical machinery that underlie the empirical observations in Section~\ref{sec:experiment}: the biaffine arc-and-relation scoring function, the rotary positional rotation used in the SOTA encoder, and the Newton--Schulz orthogonalization step at the core of the Muon optimizer. All notation is consistent across subsections.
+
+\subsection{Notation}
+
+Let a sentence of length $L$ be encoded by the contextual encoder into a matrix of representations $\bH = [\mathbf{h}_1, \ldots, \mathbf{h}_L]^\top \in \mathbb{R}^{L \times d_h}$ where $d_h$ is fixed at 800 across all encoder variants. Let $R$ denote the size of the dependency-relation alphabet. For an arc that connects a dependent token $i$ to a head token $j$, we write $i \rightarrow j$. We use boldface for matrices and tensors, italic for scalars, and $\mathbb{R}$ for real-valued tensors.
+
+\subsection{Biaffine attention}
+
+The bilinear attention module of \citet{dozat2017biaffine} computes two independent score tensors: the unlabeled arc scores and the labeled relation scores. Both are derived from four projections of the encoder output, one for each role-by-prediction combination. We denote the arc projections by $\bH^{\text{arc-dep}}$ and $\bH^{\text{arc-head}}$, both in $\mathbb{R}^{L \times d_a}$, and the relation projections by $\bH^{\text{rel-dep}}$ and $\bH^{\text{rel-head}}$, both in $\mathbb{R}^{L \times d_r}$. The two projections per role are independent MLPs with a LeakyReLU non-linearity.
+
+\paragraph{Arc score.} The score of an arc from dependent $i$ to head $j$ combines a bilinear term and a head-side bias term:
+\begin{equation}
+\label{eq:arc-score}
+s^{\text{arc}}_{i \rightarrow j} = \big(\mathbf{h}^{\text{arc-dep}}_i\big)^\top \bW^{\text{arc}} \, \mathbf{h}^{\text{arc-head}}_j + \big(\mathbf{b}^{\text{arc}}\big)^\top \mathbf{h}^{\text{arc-head}}_j,
+\end{equation}
+where $\bW^{\text{arc}} \in \mathbb{R}^{d_a \times d_a}$ is the bilinear weight matrix and $\mathbf{b}^{\text{arc}} \in \mathbb{R}^{d_a}$ is a head-side bias vector. The first term measures the geometric compatibility between the dependent-role representation of $i$ and the head-role representation of $j$, while the second term encodes the prior preference of token $j$ for being a head independently of which dependent is being scored. The asymmetry between dependent and head roles is the central design choice that distinguishes biaffine attention from a vanilla dot-product attention: the same encoder vector $\mathbf{h}_i$ has a dual identity, once as a dependent and once as a head, and the two identities are separately projected before the bilinear interaction.
+
+\paragraph{Relation score.} Conditional on a candidate arc $i \rightarrow j$, the score of the relation label $r \in \{1, \ldots, R\}$ is the entry $(i, j, r)$ of a three-mode tensor
+\begin{equation}
+\label{eq:rel-score}
+\mathbf{S}^{\text{rel}}_{i,j,r} = \big(\mathbf{h}^{\text{rel-dep}}_i\big)^\top \bW^{\text{rel}}_r \, \mathbf{h}^{\text{rel-head}}_j + \big(\mathbf{u}^{\text{rel}}_r\big)^\top \mathbf{h}^{\text{rel-dep}}_i + \big(\mathbf{v}^{\text{rel}}_r\big)^\top \mathbf{h}^{\text{rel-head}}_j + c^{\text{rel}}_r,
+\end{equation}
+where $\bW^{\text{rel}}_r \in \mathbb{R}^{d_r \times d_r}$, $\mathbf{u}^{\text{rel}}_r, \mathbf{v}^{\text{rel}}_r \in \mathbb{R}^{d_r}$ and $c^{\text{rel}}_r \in \mathbb{R}$ are the per-relation parameters of the trilinear form. Equation~(\ref{eq:rel-score}) is the natural generalization of Equation~(\ref{eq:arc-score}) to a labeled setting, with separate bias terms for both the dependent side and the head side.
+
+\paragraph{Loss.} The arc loss is the per-position cross entropy of the gold head against the row of $\mathbf{S}^{\text{arc}}$, and the relation loss is the per-position cross entropy of the gold relation against the slice of $\mathbf{S}^{\text{rel}}$ at the \emph{gold} head---teacher forcing in the original sense---so that the relation classifier never has to back-propagate through an incorrect head decision. Writing $y^{\text{head}}_i$ for the gold head of token $i$ and $y^{\text{rel}}_i$ for its gold relation, the joint loss reads
+\begin{equation}
+\label{eq:loss}
+\mathcal{L} = \frac{1}{N} \sum_{i=1}^{N} \Big[ -\log p^{\text{arc}}_{i \rightarrow y^{\text{head}}_i} - \log p^{\text{rel}}_{i, y^{\text{head}}_i, y^{\text{rel}}_i} \Big],
+\end{equation}
+where $N$ is the total number of non-padding tokens in the batch and $p^{\text{arc}}$ and $p^{\text{rel}}$ denote the softmax-normalized counterparts of $\mathbf{S}^{\text{arc}}$ and $\mathbf{S}^{\text{rel}}$.
+
+At inference time the arc decisions are not made by a per-position argmax but by an MST decoder on the matrix of arc scores, which guarantees that the predicted edges form a valid rooted tree even when the locally most probable head choices are inconsistent.
+
+\subsection{Rotary positional encoding}
+
+The SOTA Transformer encoder replaces sinusoidal positional encoding with the rotary positional encoding (RoPE) of \citet{su2021roformer}. RoPE treats each pair of consecutive coordinates inside a query or key vector as the real and imaginary parts of a complex number, and rotates the complex number by an angle that is proportional to the token position. Concretely, let $\mathbf{q}_p \in \mathbb{R}^{d_h}$ denote the query vector at position $p$, with $d_h$ even. We split $\mathbf{q}_p$ into $d_h / 2$ pairs of coordinates indexed by $k \in \{0, 1, \ldots, d_h/2 - 1\}$, define the per-pair frequency
+\begin{equation}
+\theta_k = 10\,000^{-2k/d_h},
+\end{equation}
+and apply the rotation
+\begin{equation}
+\label{eq:rope}
+\big(q^{\text{rot}}_{p, 2k},\, q^{\text{rot}}_{p, 2k+1}\big) = \big(q_{p, 2k} \cos(p \theta_k) - q_{p, 2k+1} \sin(p \theta_k),\,\, q_{p, 2k} \sin(p \theta_k) + q_{p, 2k+1} \cos(p \theta_k)\big).
+\end{equation}
+The key projection is rotated by the same formula. A direct consequence of the rotation, derived in \citet{su2021roformer}, is that the dot product between a rotated query at position $p$ and a rotated key at position $p'$ depends on the two positions only through their difference $p - p'$, which means that the self-attention mechanism inherits a relative-position bias without explicitly storing a position-dependent term inside the attention weights. The norm of every query vector is preserved by the rotation, a property we verify in the unit tests bundled with the implementation.
+
+\subsection{Muon and Newton--Schulz orthogonalization}
+
+The Muon optimizer of \citet{jordan2024muon} differs from Adam in that it does not adapt the per-coordinate learning rate using the second moment of the gradient; instead it adapts the update direction at the level of the entire two-dimensional weight matrix. Concretely, let $\bW_t \in \mathbb{R}^{m \times n}$ denote a two-dimensional weight matrix at step $t$, let $\bG_t \in \mathbb{R}^{m \times n}$ denote its gradient, and let $\bM_t \in \mathbb{R}^{m \times n}$ denote a heavy-ball momentum buffer. The Muon update reads
+\begin{equation}
+\label{eq:muon-update}
+\bM_{t+1} = \mu \bM_t + \bG_t, \qquad \bO_t = \text{NS}_5(\bM_{t+1}), \qquad \bW_{t+1} = \bW_t - \eta \, c_{m,n} \, \bO_t,
+\end{equation}
+where $\mu \in (0, 1)$ is the momentum coefficient, $\eta$ is the learning rate, $c_{m,n} = \max(1, \sqrt{m/n})$ is a non-square correction factor that keeps the effective update magnitude consistent across matrices of different aspect ratios, and $\text{NS}_5$ is the five-step Newton--Schulz iteration that maps $\bM_{t+1}$ to a matrix whose singular values are approximately one. The iteration is defined recursively by
+\begin{equation}
+\label{eq:ns-iter}
+\bX_0 = \frac{\bM_{t+1}}{\| \bM_{t+1} \|_F + \epsilon}, \qquad \bX_{k+1} = a \bX_k + (b \mathbf{A}_k + c \mathbf{A}_k^2) \bX_k, \quad \mathbf{A}_k = \bX_k \bX_k^\top,
+\end{equation}
+with the polynomial coefficients $(a, b, c) = (3.4445, -4.7750, 2.0315)$ chosen so that the scalar polynomial $p(\sigma) = a\sigma + b\sigma^3 + c\sigma^5$ is approximately equal to $\mathrm{sign}(\sigma)$ on the interval $[0, 1]$. After five iterations the singular values of $\bX_5$ lie inside a tight band around one, and $\bX_5$ is treated as an orthogonalized version of the original momentum buffer.
+
+The key consequence of Equation~(\ref{eq:ns-iter}), and the reason Muon turns out to act as an implicit gradient clipper on unstable training regimes, is that the spectral norm of the orthogonalized update $\bO_t$ is uniformly bounded by approximately one regardless of the spectral norm of the original momentum buffer $\bM_{t+1}$. In a regime in which a post-norm Transformer would otherwise see an unbounded gradient amplification on the first few steps---which is the exact failure mode we observe in the post-norm SDPA runs of Section~\ref{sec:experiment}---the Muon update is automatically projected onto a unit-spectral-norm direction and the magnitude of the resulting parameter step is controlled by $\eta$ alone. This is, to our knowledge, the cleanest mathematical statement available of why Muon's effective step size is much closer to $\eta$ than to $\eta \cdot \| \bG_t \|$, and it is the basis of the empirical four-fold accuracy gap we report between Muon and Adam on the post-norm Transformer.
