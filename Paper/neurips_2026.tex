@@ -1,0 +1,77 @@
+\documentclass{article}
+
+% NeurIPS 2026 preprint formatting (作业报告版本)
+\usepackage[preprint]{neurips_2026}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{booktabs}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{nicefrac}
+\usepackage{microtype}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{positioning,shapes.geometric,arrows.meta,calc,fit,backgrounds}
+
+% 数学宏 (mathbf 加粗矩阵 / 向量)
+\newcommand{\bA}{\mathbf{A}}
+\newcommand{\bG}{\mathbf{G}}
+\newcommand{\bH}{\mathbf{H}}
+\newcommand{\bI}{\mathbf{I}}
+\newcommand{\bK}{\mathbf{K}}
+\newcommand{\bM}{\mathbf{M}}
+\newcommand{\bO}{\mathbf{O}}
+\newcommand{\bQ}{\mathbf{Q}}
+\newcommand{\bS}{\mathbf{S}}
+\newcommand{\bV}{\mathbf{V}}
+\newcommand{\bW}{\mathbf{W}}
+\newcommand{\bX}{\mathbf{X}}
+
+\title{Revisiting Biaffine Dependency Parsing:\\
+An Empirical Study of Encoders, Optimizers and Word Vectors}
+
+\author{%
+  kyksj-1 \\
+  Shanghai Jiao Tong University \\
+  \texttt{kyksj1225@gmail.com} \\
+  \And
+  Suky \\
+  Wuhan University \\
+  \texttt{2024302182005@whu.edu.cn} \\
+}
+
+
+\begin{document}
+
+\maketitle
+
+\input{sections/00_abstract.tex}
+
+\input{sections/01_introduction.tex}
+
+\input{sections/02_our_work.tex}
+
+\input{sections/03_methodology.tex}
+
+\input{sections/04_theory.tex}
+
+\input{sections/05_experiment.tex}
+
+\input{sections/06_results.tex}
+
+\input{sections/06_conclusion.tex}
+
+\clearpage
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\appendix
+\input{sections/A_training_recipe.tex}
+
+\end{document}

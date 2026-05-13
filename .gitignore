@@ -1,6 +1,8 @@
 CLAUDE.md
 
 *.sh
+# 例外:工程必要的启动脚本(放在 scripts/ 目录下)需要追踪
+!PyTorch_Biaffine_Dependency_Parsing/scripts/*.sh
 
 *.bz2
 

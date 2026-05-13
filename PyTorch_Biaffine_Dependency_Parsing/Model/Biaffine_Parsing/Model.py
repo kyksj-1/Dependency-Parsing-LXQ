@@ -5,6 +5,10 @@ import numpy as np
 import random
 
 from Model.Biaffine_Parsing.Layer import *
+# Stage 2 新增:Transformer/SDPA encoder backbone,与 MyLSTM 接口对齐
+from Model.Biaffine_Parsing.TransformerEncoder import TransformerEncoder
+# Phase 4 SOTA encoder (RoPE/SwiGLU/LayerScale/Pre-LN)
+from Model.Biaffine_Parsing.TransformerEncoderLarge import TransformerEncoderLarge
 
 from DataUtils.Common import *
 torch.manual_seed(seed_num)
@@ -67,15 +71,56 @@ class ParserModel(nn.Module):
         else:
             print("[INFO] pretrained_weight is None, ext_word_embed will be trained from scratch.")
 
-        self.lstm = MyLSTM(
-            input_size=config.embed_dim + config.tag_dims,
-            hidden_size=config.lstm_hiddens,
-            num_layers=config.lstm_layers,
-            batch_first=True,
-            bidirectional=True,
-            dropout_in=config.dropout_lstm_input,
-            dropout_out=config.dropout_lstm_hidden,
-        )
+        # === Stage 2 编码器分支:lstm 走原版 MyLSTM,transformer 走新增 TransformerEncoder ===
+        # 关键约束:两条通路最终都要输出 (B, L, 2*lstm_hiddens=800) 给后面的 MLP_arc_*,
+        #         所以 TransformerEncoder.output_dim 也固定为 2*config.lstm_hiddens
+        self.encoder_type = config.encoder_type
+        if self.encoder_type == "lstm":
+            # 保持 self.lstm 名字不变,与 Stage 1 ckpt 的 state_dict key 兼容
+            self.lstm = MyLSTM(
+                input_size=config.embed_dim + config.tag_dims,
+                hidden_size=config.lstm_hiddens,
+                num_layers=config.lstm_layers,
+                batch_first=True,
+                bidirectional=True,
+                dropout_in=config.dropout_lstm_input,
+                dropout_out=config.dropout_lstm_hidden,
+            )
+        elif self.encoder_type == "transformer":
+            # 用 self.transformer 名字,与 lstm 通路 ckpt 不冲突
+            self.transformer = TransformerEncoder(
+                input_size=config.embed_dim + config.tag_dims,
+                d_model=config.encoder_d_model,
+                nhead=config.encoder_nhead,
+                num_layers=config.encoder_num_layers,
+                ff_size=config.encoder_ff_size,
+                dropout=config.encoder_dropout,
+                output_dim=2 * config.lstm_hiddens,
+                norm_first=config.encoder_norm_first,
+                activation=config.encoder_activation,
+            )
+            print("[INFO] encoder_type=transformer, "
+                  "可训练参数: {:.2f}M".format(self.transformer.num_parameters() / 1e6))
+        elif self.encoder_type == "transformer_large":
+            # Phase 4 SOTA: Pre-LN + RoPE + SwiGLU + LayerScale
+            # 用 self.transformer_large 名字,与其他通路 ckpt 隔离
+            self.transformer_large = TransformerEncoderLarge(
+                input_size=config.embed_dim + config.tag_dims,
+                d_model=config.large_d_model,
+                nhead=config.large_nhead,
+                num_layers=config.large_num_layers,
+                ff_size=config.large_ff_size,
+                dropout=config.large_dropout,
+                output_dim=2 * config.lstm_hiddens,
+                layerscale_init=config.large_layerscale_init,
+                use_rope=config.large_use_rope,
+            )
+            print("[INFO] encoder_type=transformer_large, "
+                  "可训练参数: {:.2f}M".format(self.transformer_large.num_parameters() / 1e6))
+        else:
+            raise ValueError(
+                "未知 encoder_type: {!r}, 仅支持 'lstm' / 'transformer' / 'transformer_large'".format(
+                    self.encoder_type))
 
         self.mlp_arc_dep = NonLinear(
             input_size=2*config.lstm_hiddens,
@@ -107,8 +152,17 @@ class ParserModel(nn.Module):
 
         x_lexical = torch.cat((x_embed, x_tag_embed), dim=2)
 
-        outputs, _ = self.lstm(x_lexical, masks, None)
-        outputs = outputs.transpose(1, 0)
+        # === Stage 2 编码器分支 ===
+        # MyLSTM 内部 batch_first=True 入,但返回的是 (L, B, 2*hidden),需要 transpose 回 (B, L, ...)
+        # TransformerEncoder / Large 直接返回 batch_first 的 (B, L, output_dim)
+        if self.encoder_type == "lstm":
+            outputs, _ = self.lstm(x_lexical, masks, None)
+            outputs = outputs.transpose(1, 0)
+        elif self.encoder_type == "transformer":
+            outputs = self.transformer(x_lexical, masks)
+        else:
+            # transformer_large
+            outputs = self.transformer_large(x_lexical, masks)
 
         if self.training:
             outputs = drop_sequence_sharedmask(outputs, self.config.dropout_mlp)

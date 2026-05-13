@@ -14,6 +14,7 @@
 import os
 import time
 import random
+from contextlib import nullcontext as _NullContext
 from typing import Optional
 
 import numpy as np
@@ -26,6 +27,9 @@ from DataUtils.utils import Best_Result, set_lrate
 from DataUtils.Common import seed_num, cpu_device
 from DataUtils.Logger import History
 from DataUtils.Checkpoint import update_best, save_last, save_checkpoint
+# Phase 4 SOTA 训练增强
+from DataUtils.Scheduler import WarmupCosineSchedule
+from DataUtils.EMA import EMAWrapper
 from Dataloader.DataLoader import batch_variable_depTree
 from Dataloader.Dependency import evalDepTree
 
@@ -57,8 +61,16 @@ class Train(object):
         # ---- 优化器 ----
         # SGD/Adam 公用 Optimizer 包装；旧版的 betas=(0.9,0.9) 来自 Dozat 论文，
         # 与 PyTorch 默认 (0.9, 0.999) 不同，对句法依存任务实测更稳定，保留。
+        # Stage 2 新增 Muon (Keller Jordan 2024):矩阵参数走 Newton-Schulz 正交化,
+        # 1D / embedding 走 AdamW fallback。lr 默认 0.02 (Muon 主干),不需要外加 grad clip。
         if self.config.learning_algorithm == "SGD":
             self.optimizer = Optimizer(name="SGD", model=self.parser.model,
+                                       lr=self.config.learning_rate,
+                                       weight_decay=self.config.weight_decay,
+                                       grad_clip="None")
+        elif self.config.learning_algorithm == "Muon":
+            # Muon 内部 NS 已经约束矩阵谱范数,外层 grad clip 反而干扰更新方向,关闭
+            self.optimizer = Optimizer(name="Muon", model=self.parser.model,
                                        lr=self.config.learning_rate,
                                        weight_decay=self.config.weight_decay,
                                        grad_clip="None")
@@ -69,6 +81,28 @@ class Train(object):
                                        grad_clip="None",
                                        betas=(0.9, 0.9), eps=1.0e-12)
         self._log("Optimizer: {}".format(self.optimizer))
+
+        # ---- Phase 4 SOTA 训练增强 (默认全部关闭,需在 cfg / override 启用) ----
+        self.scheduler = None
+        self.ema = None
+        if getattr(self.config, "use_warmup_cosine", False):
+            # 估算总 step 数: epochs × batches_per_epoch / update_batch_size (梯度累积)
+            total_steps = max(
+                self.config.epochs * len(self.train_iter) // max(self.config.update_batch_size, 1),
+                self.config.warmup_steps + 1,
+            )
+            self.scheduler = WarmupCosineSchedule(
+                optimizer=self.optimizer,
+                warmup_steps=self.config.warmup_steps,
+                total_steps=total_steps,
+                min_lr_ratio=self.config.min_lr_ratio,
+            )
+            self._log("LR Scheduler: warmup={} total={} min_ratio={}".format(
+                self.config.warmup_steps, total_steps, self.config.min_lr_ratio))
+
+        if getattr(self.config, "use_ema", False):
+            self.ema = EMAWrapper(self.parser.model, decay=self.config.ema_decay)
+            self._log("EMA: enabled, decay={}".format(self.config.ema_decay))
 
         # ---- 训练状态 ----
         self.best_score = Best_Result()
@@ -110,6 +144,12 @@ class Train(object):
         if backward_count % cfg.update_batch_size == 0 or backward_count == self.train_iter_len:
             self._clip_model_norm(cfg.clip_max_norm_use, cfg.clip_max_norm)
             self.optimizer.step()
+            # Phase 4 SOTA: scheduler 在 optimizer.step() 之后调
+            if self.scheduler is not None:
+                self.scheduler.step()
+            # Phase 4 SOTA: EMA 跟踪权重
+            if self.ema is not None:
+                self.ema.update()
             self.optimizer.zero_grad()
 
     def _early_stop(self, epoch: int) -> bool:
@@ -260,7 +300,10 @@ class Train(object):
         alphabet = self.config.alphabet
 
         eval_start = time.time()
-        with torch.no_grad():
+        # Phase 4 SOTA: 若开启 EMA,评估时用 EMA 权重 swap into model
+        # context manager 退出后自动恢复原 model 权重 (训练继续用 raw weights)
+        ema_ctx = self.ema.swap() if self.ema is not None else _NullContext()
+        with torch.no_grad(), ema_ctx:
             for batch_features in data_iter:
                 one_batch = self._get_one_batch(batch_features.insts)
                 words = batch_features.words

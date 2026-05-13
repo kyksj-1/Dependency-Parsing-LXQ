@@ -1,0 +1,6 @@
+\section{Conclusion}
+\label{sec:conclusion}
+
+We ran a controlled fourteen-configuration ablation on an 8.3K-sentence Chinese dependency treebank, crossing word-vector dimensionality, word-vector domain, optimizer and contextual encoder. The best dev UAS in the matrix ($86.93$) comes from the BiLSTM trained with Muon for 100 epochs under a warmup--cosine schedule, $0.50$ above the Adam baseline. The largest Transformer we trained (76M parameters with pre-norm, RoPE, SwiGLU, LayerScale and EMA) reaches $83.92$ UAS, $2.51$ below the BiLSTM.
+
+The broader lesson is that architecture choice cannot be separated from data scale. On this small treebank, the recurrent encoder's locality and order bias are a feature, not a historical artifact. The Transformer needs more labels, pretrained initialization, or both before its capacity becomes useful. The optimizer ablation reaches a parallel conclusion. Muon is not a magic replacement for Adam, but when paired with warmup, cosine decay, and a longer run, it gives the strongest score in the whole matrix. We do not claim a methodological advance; we report a reproducible map of what worked, what failed, and where the numerical gaps actually came from.

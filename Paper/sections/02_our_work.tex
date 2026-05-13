@@ -1,0 +1,44 @@
+\section{Our Work}
+\label{sec:our_work}
+
+This section gives the matrix and the headline numbers before any technical content. Table~\ref{tab:matrix-overview} lists all fourteen runs that contribute to the analysis. The training corpus is the NLP\&CC 2013 Chinese dependency treebank with 8\,301 training sentences and 534 dev sentences (12\,987 evaluable arcs after punctuation filtering). Word vectors are the Chinese-Word-Vectors release of \citet{li2018cwv}. All runs share the same Biaffine head, MLP projections and MST decoder; only the encoder, the optimizer and the word vectors vary.
+
+\begin{table}[t]
+\caption{Fourteen-run training matrix on the same dev set. The Adam BiLSTM baseline reaches $86.43$ UAS. The only configuration that surpasses it is the BiLSTM trained with Muon for $100$ epochs under warmup and cosine decay, while the largest Transformer stops at $83.92$ UAS. Under this 8.3K-sentence data scale, scaling the encoder underperforms scheduling the optimizer.}
+\label{tab:matrix-overview}
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lllrr@{}}
+\toprule
+Block & Encoder & Optimizer / schedule & Dev UAS & Dev LAS \\
+\midrule
+Stage-1 baseline       & BiLSTM            & Adam, 50ep                          & 86.43 & 67.65 \\
+Stage-1 100d (PCA)     & BiLSTM            & Adam, 50ep                          & 86.14 & 66.57 \\
+Stage-1 Renmin 300d    & BiLSTM            & Adam, 50ep                          & 86.38 & 67.58 \\
+Stage-1 Zhihu 300d     & BiLSTM            & Adam, 50ep                          & 86.29 & 67.68 \\
+Stage-1 Literature 300d& BiLSTM            & Adam, 50ep                          & 86.23 & 67.85 \\
+Stage-1 from-scratch   & BiLSTM            & Adam, 50ep, no pretrain             & 84.84 & 64.26 \\
+Stage-1 SGD            & BiLSTM            & SGD, 50ep                           & 17.66 & ~1.58 \\
+\midrule
+Stage-2 SDPA-9M PostLN & Transformer 9M    & Adam, 50ep, no warmup               & 12.20 & ~3.36 \\
+Stage-2 SDPA-9M PostLN & Transformer 9M    & Muon, 50ep, no warmup               & 53.35 & 39.74 \\
+Stage-2 BiLSTM         & BiLSTM            & Muon, 50ep, no warmup               & 85.51 & 65.81 \\
+\midrule
+Stage-2 SDPA-9M PreLN  & Transformer 9M    & Adam, 50ep, warmup 500              & 82.00 & 63.55 \\
+Stage-2 SDPA-9M PreLN  & Transformer 9M    & Muon ($\eta{=}0.005$), warmup 1000  & 81.03 & 62.02 \\
+Stage-2 SDPA-Large     & Transformer 76M   & Muon, 100ep, warmup+cosine+EMA      & 83.92 & 65.60 \\
+\textbf{Stage-2 BiLSTM} & \textbf{BiLSTM}   & \textbf{Muon, 100ep, warmup+cosine} & \textbf{86.93} & \textbf{68.37} \\
+\bottomrule
+\end{tabular}
+}
+\end{table}
+
+\paragraph{Headline numbers.}
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \textbf{Best dev UAS = 86.93}, by BiLSTM + Muon + 100 epochs + warmup--cosine; $+0.50$ over the Adam baseline.
+  \item \textbf{Largest Transformer = 83.92 UAS} (76M parameters, all modern tricks); $-2.51$ relative to the BiLSTM baseline.
+  \item \textbf{SDPA-9M post-norm without warmup collapses} to 12.20 UAS (Adam) or 53.35 UAS (Muon); switching to pre-norm + warmup recovers to 81--82 UAS.
+\end{itemize}
+
+\paragraph{Variants we considered but did not run.} We did not run Mixture-of-Experts FFNs, linear-attention substitutes, multi-head causal connections \citep{deepseekteam2025mhc}, or gated attention for large language models \citep{qiu2025gatedattention}. The main reason is scale. Our labeled set has only 8.3K training sentences, and even our largest encoder has 76M parameters, far below the billion-parameter setting where these methods are usually tested. Under this small-data, small-model budget, the extra routing, sparsity or attention machinery would add instability without a fair chance to show its intended advantage.

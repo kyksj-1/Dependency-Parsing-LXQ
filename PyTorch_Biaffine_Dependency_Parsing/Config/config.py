@@ -251,6 +251,72 @@ class Configurable(myconf):
     def dropout_mlp(self):
         return self._config.getfloat("Model", "dropout_mlp")
 
+    # Encoder (Stage 2 新增)
+    # type=lstm 走 Stage 1 原版 BiLSTM；type=transformer 走 TransformerEncoder.py
+    @property
+    def encoder_type(self) -> str:
+        # 若用户的 cfg 没有 [Encoder] 段（兼容旧 cfg），默认回退到 lstm
+        if not self._config.has_section("Encoder"):
+            return "lstm"
+        return self._config.get("Encoder", "type").lower()
+
+    @property
+    def encoder_d_model(self) -> int:
+        return self._config.getint("Encoder", "d_model")
+
+    @property
+    def encoder_nhead(self) -> int:
+        return self._config.getint("Encoder", "nhead")
+
+    @property
+    def encoder_num_layers(self) -> int:
+        return self._config.getint("Encoder", "num_layers")
+
+    @property
+    def encoder_ff_size(self) -> int:
+        return self._config.getint("Encoder", "ff_size")
+
+    @property
+    def encoder_dropout(self) -> float:
+        return self._config.getfloat("Encoder", "dropout")
+
+    @property
+    def encoder_norm_first(self) -> bool:
+        return self._config.getboolean("Encoder", "norm_first")
+
+    @property
+    def encoder_activation(self) -> str:
+        return self._config.get("Encoder", "activation").lower()
+
+    # ---- Phase 4 large 配置 (type=transformer_large 时生效) ----
+    @property
+    def large_d_model(self) -> int:
+        return self._config.getint("Encoder", "large_d_model")
+
+    @property
+    def large_nhead(self) -> int:
+        return self._config.getint("Encoder", "large_nhead")
+
+    @property
+    def large_num_layers(self) -> int:
+        return self._config.getint("Encoder", "large_num_layers")
+
+    @property
+    def large_ff_size(self) -> int:
+        return self._config.getint("Encoder", "large_ff_size")
+
+    @property
+    def large_dropout(self) -> float:
+        return self._config.getfloat("Encoder", "large_dropout")
+
+    @property
+    def large_layerscale_init(self) -> float:
+        return self._config.getfloat("Encoder", "large_layerscale_init")
+
+    @property
+    def large_use_rope(self) -> bool:
+        return self._config.getboolean("Encoder", "large_use_rope")
+
     # Optimizer
     @property
     def adam(self):
@@ -259,6 +325,13 @@ class Configurable(myconf):
     @property
     def sgd(self):
         return self._config.getboolean("Optimizer", "sgd")
+
+    @property
+    def muon(self) -> bool:
+        # 若用户 cfg 没有 muon 字段（兼容旧 cfg），默认 False
+        if not self._config.has_option("Optimizer", "muon"):
+            return False
+        return self._config.getboolean("Optimizer", "muon")
 
     @property
     def learning_rate(self):
@@ -324,3 +397,28 @@ class Configurable(myconf):
     @property
     def log_interval(self):
         return self._config.getint("Train", "log_interval")
+
+    # ---- Phase 4 SOTA 训练增强 (默认关闭) ----
+    @property
+    def use_warmup_cosine(self) -> bool:
+        if not self._config.has_option("Train", "use_warmup_cosine"):
+            return False
+        return self._config.getboolean("Train", "use_warmup_cosine")
+
+    @property
+    def warmup_steps(self) -> int:
+        return self._config.getint("Train", "warmup_steps")
+
+    @property
+    def min_lr_ratio(self) -> float:
+        return self._config.getfloat("Train", "min_lr_ratio")
+
+    @property
+    def use_ema(self) -> bool:
+        if not self._config.has_option("Train", "use_ema"):
+            return False
+        return self._config.getboolean("Train", "use_ema")
+
+    @property
+    def ema_decay(self) -> float:
+        return self._config.getfloat("Train", "ema_decay")

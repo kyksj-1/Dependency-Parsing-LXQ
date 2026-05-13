@@ -1,0 +1,164 @@
+\section{Methodology}
+\label{sec:method}
+
+\subsection{Overall pipeline}
+\label{sec:method-overall}
+
+Figure~\ref{fig:pipeline} summarizes the parser. Word and POS tag embeddings are summed with a frozen pretrained word vector and concatenated, fed to a contextual encoder, projected by two MLPs into head-role and dependent-role vectors, and scored by a biaffine arc/relation module. Inference uses Chu--Liu--Edmonds MST decoding on the arc score matrix. The encoder slot accepts three implementations selected at construction time, \texttt{lstm} (the original three-layer BiLSTM), \texttt{transformer} (a parameter-matched SDPA Transformer), and \texttt{transformer\_large} (a deeper SDPA Transformer with modern training tricks). Every other component is shared across runs.
+
+\begin{figure}[t]
+  \centering
+  \resizebox{\textwidth}{!}{%
+  \begin{tikzpicture}[
+    font=\normalsize,
+    >={Latex[length=2mm,width=1.6mm]},
+    box/.style={rounded corners=2pt, draw, line width=0.45pt, inner sep=3.2pt, align=center, minimum height=7mm},
+    group/.style={rounded corners=4pt, draw, dashed, line width=0.55pt, inner sep=3mm},
+    input/.style={box, fill=gray!8},
+    embed/.style={box, fill=blue!7, draw=blue!60!black},
+    tag/.style={box, fill=yellow!18, draw=orange!70!black},
+    stage/.style={box, fill=orange!14, draw=orange!70!black},
+    enc/.style={box, fill=purple!9, draw=purple!65!black},
+    mlp/.style={box, fill=teal!10, draw=teal!70!black},
+    score/.style={box, fill=red!8, draw=red!70!black},
+    train/.style={box, fill=orange!10, draw=orange!75!black},
+    opt/.style={box, fill=green!12, draw=green!60!black},
+    arr/.style={->, draw=black!70, line width=0.45pt},
+    thinarr/.style={->, draw=black!45, line width=0.35pt},
+    dasharr/.style={->, dashed, draw=black!45, line width=0.35pt}
+  ]
+
+  % ================= 1. Embedding Stack (压缩了X轴间距) =================
+  \node[input] (words) at (0, 2.3) {Words\\$(B,L)$};
+  \node[input] (tags)  at (0, -3.0) {POS tags\\$(B,L)$};
+
+  \node[embed]         (wemb) at (2.2, 3.8) {learned word\\embedding};
+  \node[embed, dashed] (xemb) at (2.2, 1.0) {frozen external\\word vector};
+  \node[tag]           (temb) at (2.2, -3.0) {POS\\embedding};
+
+  \node[circle, draw, inner sep=0.5pt, minimum size=4.6mm] (sum) at (4.0, 2.3) {$+$};
+  \node[stage, text width=28mm] (lex) at (6.2, -0.3) {lexical feature\\$[\text{word}{+}\text{ext};\text{tag}]$};
+
+  % Embedding Arrows (修改为了平滑曲线)
+  \draw[arr] (words.east) to[out=0, in=180] (wemb.west);
+  \draw[arr] (words.east) to[out=0, in=180] (xemb.west);
+  \draw[arr] (tags.east) -- (temb.west);
+
+  \draw[arr] (wemb.east) to[out=0, in=90] (sum.north);
+  \draw[arr] (xemb.east) to[out=0, in=270] (sum.south);
+
+  \draw[arr] (sum.east) to[out=0, in=180] (lex.west);
+  \draw[arr] (temb.east) to[out=0, in=180] (lex.west);
+
+  % ================= 2. Encoder Slot (向右平移，避免重叠) =================
+  \node[enc, text width=24mm] (e1) at (10.5, 3.1) {BiLSTM\\3 layers};
+  \node[enc, text width=24mm] (e2) at (10.5, -0.3) {SDPA-9M\\4 layers};
+  \node[enc, text width=24mm] (e3) at (10.5, -3.7) {SDPA-Large\\8 layers};
+
+  \node[stage, text width=29mm] (hout) at (14.6, -0.3) {$\mathbf{H} \in \mathbb{R}^{B\times L\times800}$\\shared interface};
+
+  % Encoder Arrows
+  \draw[thinarr] (lex.east) to[out=0,in=180] (e1.west);
+  \draw[arr]     (lex.east) -- (e2.west);
+  \draw[thinarr] (lex.east) to[out=0,in=180] (e3.west);
+
+  \draw[arr] (e1.east) to[out=0, in=180] ([yshift=3mm]hout.west);
+  \draw[arr] (e2.east) -- (hout.west);
+  \draw[arr] (e3.east) to[out=0, in=180] ([yshift=-3mm]hout.west);
+
+  % ================= 3. Head/Dependent MLPs (增加高度，垂直单列排布) =================
+  \node[mlp] (ad) at (17.8, 3.4) {arc-dep};
+  \node[mlp] (ah) at (17.8, 1.1) {arc-head};
+  \node[mlp] (rd) at (17.8, -1.2) {rel-dep};
+  \node[mlp] (rh) at (17.8, -3.5) {rel-head};
+
+  % MLP Arrows: 使用"单干分支"直角走线，更加整洁
+  \coordinate (hout_split) at ([xshift=6.5mm]hout.east);
+  \draw[arr] (hout.east) -- (hout_split);
+  \draw[arr] (hout_split) |- (ad.west);
+  \draw[arr] (hout_split) |- (ah.west);
+  \draw[arr] (hout_split) |- (rd.west);
+  \draw[arr] (hout_split) |- (rh.west);
+
+  % ================= 4. Biaffine Scorer (增加高度) =================
+  \node[score, text width=40mm] (arc) at (22.2, 2.3) {$s^{arc}_{i\to j}$\\biaffine arc score};
+  \node[score, text width=40mm] (rel) at (22.2, -2.4) {$s^{rel}_{i,j,r}$\\biaffine relation score};
+
+  % Scorer Arrows: 稍微错开落点，避免箭头完全叠在一起
+  \draw[arr] (ad.east) to[out=0, in=180] ([yshift=3mm]arc.west);
+  \draw[arr] (ah.east) to[out=0, in=180] ([yshift=-3mm]arc.west);
+  \draw[arr] (rd.east) to[out=0, in=180] ([yshift=3mm]rel.west);
+  \draw[arr] (rh.east) to[out=0, in=180] ([yshift=-3mm]rel.west);
+
+  % ================= 5. Outputs, Loss & Optimizers =================
+  \node[stage] (mst) at (26.5, 2.3) {MST\\decoder};
+  \node[stage, font=\normalsize\bfseries] (tree) at (28.8, 2.3) {dependency\\tree};
+
+  % 修改点：将 Loss 方框向右移动，放置于 MST 下方
+  \node[train, text width=42mm] (loss) at (27.5, -1.1) {$\mathcal{L}=\mathcal{L}_{arc}+\mathcal{L}_{rel}$\\gold heads supervise relation labels};
+
+  % 修改点：整体下移优化器，对齐 Loss
+  \node[opt] (adam) at (25.8, -5.2) {Adam};
+  \node[opt] (sgd)  at (27.5, -5.2) {SGD};
+  \node[opt] (muon) at (29.2, -5.2) {Muon};
+
+  % Final Arrows
+  \draw[arr] (arc.east) -- (mst.west);
+  \draw[arr] (mst.east) -- (tree.west);
+
+  % 评分到Loss的虚线优化
+  \draw[dasharr] (arc.east) to[out=270, in=180] (loss.west);
+  \draw[dasharr] (rel.east) to[out=90, in=180] (loss.west);
+
+  % Loss到优化器的虚线优化
+  \draw[dasharr] (loss.south) to[out=270, in=90] (adam.north);
+  \draw[dasharr] (loss.south) -- (sgd.north);
+  \draw[dasharr] (loss.south) to[out=270, in=90] (muon.north);
+
+  % ================= 6. Background Groups =================
+  \begin{pgfonlayer}{background}
+    \node[group, draw=blue!55!black, fit=(words)(tags)(wemb)(xemb)(temb)(sum)(lex), label={[blue!55!black,font=\normalsize\bfseries]above:Embedding stack}] {};
+    \node[group, draw=purple!65!black, fit=(e1)(e2)(e3)(hout), label={[purple!65!black,font=\normalsize\bfseries]above:Encoder slot}] {};
+    \node[group, draw=teal!70!black, fit=(ad)(ah)(rd)(rh), label={[teal!70!black,font=\normalsize\bfseries]above:Head/Dependent MLPs}] {};
+    \node[group, draw=red!70!black, fit=(arc)(rel), label={[red!70!black,font=\normalsize\bfseries]above:Biaffine scorer}] {};
+    \node[group, draw=green!60!black, fit=(adam)(sgd)(muon), label={[green!60!black,font=\normalsize\bfseries]below:Optimizers}] {};
+  \end{pgfonlayer}
+
+  \end{tikzpicture}
+  }
+  \caption{Parser pipeline. The left block builds token features, the encoder block selects one contextualizer, the middle block creates role-specific projections, and the right block scores arcs, decodes a tree, and supplies training losses. Accuracy differences in the experiments come from the encoder and optimizer choices while the biaffine head and decoder stay fixed.}
+  \label{fig:pipeline}
+\end{figure}
+
+In the figure, the four MLP boxes split token representations by syntactic role. The dependent-side MLPs produce features for the token being attached, the head-side MLPs produce features for the candidate parent, and the same split is repeated for arc scoring and relation scoring.
+
+\subsection{Embedding layer}
+\label{sec:method-embedding}
+
+A learned word embedding $\bW^{\text{word}}$ is summed with a frozen pretrained embedding $\bW^{\text{ext}}$ from the Chinese-Word-Vectors collection \citep{li2018cwv}; a separate learned 100-dim POS embedding is concatenated. Following \citet{dozat2017biaffine} we apply \emph{word dropout}, which zeros entire token embeddings independently with probability $p$, in addition to standard activation dropout.
+
+\subsection{Encoder variants}
+\label{sec:method-encoder}
+
+Three encoders plug into the same interface, all producing $\bH\in\mathbb{R}^{L\times 800}$ for the downstream MLPs.
+
+\paragraph{BiLSTM.} Three-layer bidirectional LSTM with 400 hidden units per direction, orthonormal recurrent initialization \citep{dozat2017biaffine}, and variational dropout (the same dropout mask reused across timesteps within a sequence). Implemented on top of \texttt{nn.LSTMCell}. About 13M parameters.
+
+\paragraph{SDPA-9M.} Four-layer Transformer with $d_{\text{model}}=512$, $h=8$ heads, $d_{\text{ff}}=1024$, sinusoidal positional encoding. Parameter count is matched to the BiLSTM (about 9M) so that the encoder-family comparison is not contaminated by capacity. Padding is handled by an explicit \texttt{key\_padding\_mask}, and padding positions are zeroed before the output projection so that the bilinear scorer is not fed attention-leaked noise. We run two layout variants of this encoder, \emph{post-norm} (Vaswani-style $\bX'=\text{LN}(\bX+\text{Sub}(\bX))$) and \emph{pre-norm} ($\bX'=\bX+\text{Sub}(\text{LN}(\bX))$, \citealt{xiong2020lnorder}).
+
+\paragraph{SDPA-Large.} Eight-layer Transformer with $d_{\text{model}}=768$, $h=12$, $d_{\text{ff}}=3072$ (about 76M parameters). It combines pre-norm residuals, RoPE for query/key rotation \citep{su2021roformer}, SwiGLU feed-forward blocks \citep{shazeer2020glu}, and per-channel LayerScale initialised at $10^{-4}$ \citep{touvron2021cait}. We call this encoder \emph{SDPA-Large} throughout the paper. The name only marks model size within our grid; it is not a state-of-the-art claim.
+
+\subsection{Attention layer}
+\label{sec:method-attention}
+
+We use PyTorch's \texttt{F.scaled\_dot\_product\_attention} kernel, which dispatches at runtime to a FlashAttention-style implementation when eligible. RoPE is applied immediately before the kernel via the rotation in Equation~(\ref{eq:rope}). The bilinear attention used inside the biaffine head is a separate object; we describe it in Section~\ref{sec:theory}.
+
+\subsection{Optimizers}
+\label{sec:method-optimizer}
+
+We compare three optimizers:
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \textbf{Adam}, $\beta_1{=}0.9$, $\beta_2{=}0.9$, $\epsilon{=}10^{-12}$, following \citet{dozat2017biaffine}; the unusual small $\beta_2$ is suited to the BiLSTM and we keep it for backward compatibility.
+  \item \textbf{SGD} with $\eta{=}10^{-2}$, no momentum, no schedule. Included as a negative control.
+  \item \textbf{Muon} \citep{jordan2024muon}. Each 2D non-embedding weight is updated via Newton--Schulz orthogonalization of its momentum buffer with per-tensor scale $\max(1,\sqrt{m/n})$. All other parameters (1D, embeddings) fall back to AdamW. Default $\eta_{\text{Muon}}{=}0.02$, $\eta_{\text{AdamW}}{=}3{\times}10^{-4}$. We package the routing logic in a wrapper so the standard \texttt{step}/\texttt{zero\_grad}/\texttt{state\_dict} interface remains intact.
+\end{itemize}

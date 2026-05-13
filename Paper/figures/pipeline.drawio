@@ -1,0 +1,162 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mxfile host="app.diagrams.net" agent="paper-pipeline-v1" version="22.0.0" type="device">
+  <diagram name="pipeline" id="pipeline">
+    <mxGraphModel dx="1300" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1100" pageHeight="720" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="Biaffine Dependency Parsing Pipeline" style="text;html=1;align=center;verticalAlign=middle;fontSize=16;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="1060" height="30" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="in_words" value="Words&#xa;(B, L)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#424242;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="40" y="70" width="100" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="in_tags" value="POS Tags&#xa;(B, L)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#424242;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="160" y="70" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="emb_w" value="Word Embed&#xa;(learned, 300)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="20" y="160" width="80" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="emb_ext" value="Pretrained ExtWord&#xa;(frozen, 300)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;dashed=1;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="110" y="160" width="130" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="emb_tag" value="POS Embed&#xa;(learned, 100)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF9C4;strokeColor=#F9A825;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="250" y="160" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="sum_w" value="&#x2295;" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#424242;fontSize=20;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="100" y="245" width="40" height="40" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="lex" value="Lexical Feature [word&#x2295;ext ; tag]&#xa;dim = 400  |  word-dropout in training" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#E65100;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="50" y="315" width="320" height="60" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="enc_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#7B1FA2;dashed=1;strokeWidth=2" vertex="1" parent="1">
+          <mxGeometry x="40" y="410" width="340" height="180" as="geometry"/>
+        </mxCell>
+        <mxCell id="enc_title" value="Contextual Encoder  (one of three)" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#7B1FA2" vertex="1" parent="1">
+          <mxGeometry x="40" y="415" width="340" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="enc_lstm" value="BiLSTM 3L&#xa;~13M" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE4EC;strokeColor=#AD1457;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="60" y="450" width="95" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="enc_sdpa9" value="SDPA-9M&#xa;4L, d=512&#xa;Post-/Pre-LN" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#2E7D32;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="170" y="450" width="95" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="enc_large" value="SDPA-Large&#xa;8L, d=768&#xa;RoPE+SwiGLU+LS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#6A1B9A;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="280" y="450" width="95" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="enc_select" value="encoder_type &#x2208; { lstm, transformer, transformer_large }" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontColor=#555555" vertex="1" parent="1">
+          <mxGeometry x="40" y="520" width="340" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="enc_h" value="H &#x2208; R^{B &#xd7; L &#xd7; 800}&#xa;(common output interface)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#E65100;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="100" y="545" width="220" height="35" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="mlp_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#00838F;dashed=1;strokeWidth=2" vertex="1" parent="1">
+          <mxGeometry x="450" y="160" width="240" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="mlp_title" value="Role-specific MLP Projections" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#00838F" vertex="1" parent="1">
+          <mxGeometry x="450" y="165" width="240" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="mlp_arc_dep" value="MLP&#xa;arc-dep" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#B2EBF2;strokeColor=#00838F;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="470" y="200" width="90" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="mlp_arc_head" value="MLP&#xa;arc-head" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#B2EBF2;strokeColor=#00838F;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="580" y="200" width="90" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="mlp_rel_dep" value="MLP&#xa;rel-dep" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#B2DFDB;strokeColor=#00695C;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="470" y="275" width="90" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="mlp_rel_head" value="MLP&#xa;rel-head" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#B2DFDB;strokeColor=#00695C;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="580" y="275" width="90" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="mlp_role_note" value="dual role: each token is projected separately&#xa;as a head-role and as a dependent-role vector" style="text;html=1;align=center;verticalAlign=middle;fontSize=9;fontStyle=2;fontColor=#555555" vertex="1" parent="1">
+          <mxGeometry x="450" y="335" width="240" height="35" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="biaf_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#C62828;dashed=1;strokeWidth=2" vertex="1" parent="1">
+          <mxGeometry x="450" y="410" width="240" height="180" as="geometry"/>
+        </mxCell>
+        <mxCell id="biaf_title" value="Biaffine Scorer" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#C62828" vertex="1" parent="1">
+          <mxGeometry x="450" y="415" width="240" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="biaf_arc" value="s_arc(i&#x2192;j) = h_i&#x1d40; W_arc h_j + b&#x1d40; h_j" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCDD2;strokeColor=#C62828;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="465" y="445" width="210" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="biaf_arc_logit" value="arc_logit &#x2208; R^{B &#xd7; L &#xd7; L}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#E65100;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="475" y="490" width="190" height="28" as="geometry"/>
+        </mxCell>
+        <mxCell id="biaf_rel" value="rel_logit &#x2208; R^{B &#xd7; L &#xd7; L &#xd7; R}&#xa;(trilinear, per-relation)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCCBC;strokeColor=#BF360C;fontSize=10" vertex="1" parent="1">
+          <mxGeometry x="475" y="528" width="190" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="mst" value="MST Decode&#xa;(Chu&#x2013;Liu&#x2013;Edmonds)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#D7CCC8;strokeColor=#4E342E;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="750" y="475" width="160" height="55" as="geometry"/>
+        </mxCell>
+        <mxCell id="tree" value="Predicted Tree:&#xa;{(head_i, rel_i)}" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#E65100;fontSize=11;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="930" y="475" width="150" height="55" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="loss_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#E65100;strokeWidth=2" vertex="1" parent="1">
+          <mxGeometry x="750" y="160" width="330" height="220" as="geometry"/>
+        </mxCell>
+        <mxCell id="loss_title" value="Training Objective" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#BF360C" vertex="1" parent="1">
+          <mxGeometry x="750" y="165" width="330" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="loss_arc" value="L_arc = &#x2212; 1/N &#x2211;_i  log p_arc(i &#x2192; y_i^head)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#E65100;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="765" y="200" width="300" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="loss_rel" value="L_rel = &#x2212; 1/N &#x2211;_i log p_rel(i, y_i^head, y_i^rel)&#xa;(teacher-forced with gold head)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#E65100;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="765" y="245" width="300" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="loss_total" value="L = L_arc + L_rel" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCCBC;strokeColor=#BF360C;fontSize=12;fontStyle=1" vertex="1" parent="1">
+          <mxGeometry x="845" y="305" width="140" height="35" as="geometry"/>
+        </mxCell>
+        <mxCell id="loss_eval" value="Eval: UAS (head only) / LAS (head + rel)" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=2;fontColor=#555555" vertex="1" parent="1">
+          <mxGeometry x="750" y="345" width="330" height="20" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="opt_box" value="" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F1F8E9;strokeColor=#558B2F;strokeWidth=2" vertex="1" parent="1">
+          <mxGeometry x="750" y="585" width="330" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="opt_title" value="Optimizers compared" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;fontColor=#558B2F" vertex="1" parent="1">
+          <mxGeometry x="750" y="590" width="330" height="20" as="geometry"/>
+        </mxCell>
+        <mxCell id="opt_adam" value="Adam" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCEDC8;strokeColor=#558B2F;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="765" y="620" width="90" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="opt_sgd" value="SGD&#xa;(control)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#DCEDC8;strokeColor=#558B2F;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="865" y="620" width="90" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="opt_muon" value="Muon&#xa;(NS-5 ortho)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C5E1A5;strokeColor=#33691E;fontSize=11" vertex="1" parent="1">
+          <mxGeometry x="965" y="620" width="100" height="50" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e1" style="endArrow=classic;html=1;strokeColor=#424242" edge="1" parent="1" source="in_words" target="emb_w"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e2" style="endArrow=classic;html=1;strokeColor=#424242" edge="1" parent="1" source="in_words" target="emb_ext"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e3" style="endArrow=classic;html=1;strokeColor=#424242" edge="1" parent="1" source="in_tags" target="emb_tag"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e4" style="endArrow=classic;html=1;strokeColor=#424242" edge="1" parent="1" source="emb_w" target="sum_w"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e5" style="endArrow=classic;html=1;strokeColor=#424242" edge="1" parent="1" source="emb_ext" target="sum_w"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e6" style="endArrow=classic;html=1;strokeColor=#424242" edge="1" parent="1" source="sum_w" target="lex"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e7" style="endArrow=classic;html=1;strokeColor=#424242" edge="1" parent="1" source="emb_tag" target="lex"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e8" style="endArrow=classic;html=1;strokeColor=#7B1FA2;strokeWidth=2" edge="1" parent="1" source="lex" target="enc_box"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e9" style="endArrow=classic;html=1;strokeColor=#424242;strokeWidth=2" edge="1" parent="1" source="enc_h" target="mlp_box"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e10" style="endArrow=classic;html=1;strokeColor=#00838F" edge="1" parent="1" source="mlp_arc_dep" target="biaf_arc"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e11" style="endArrow=classic;html=1;strokeColor=#00838F" edge="1" parent="1" source="mlp_arc_head" target="biaf_arc"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e12" style="endArrow=classic;html=1;strokeColor=#00695C" edge="1" parent="1" source="mlp_rel_dep" target="biaf_rel"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e13" style="endArrow=classic;html=1;strokeColor=#00695C" edge="1" parent="1" source="mlp_rel_head" target="biaf_rel"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e14" style="endArrow=classic;html=1;strokeColor=#C62828" edge="1" parent="1" source="biaf_arc_logit" target="mst"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e15" style="endArrow=classic;html=1;strokeColor=#4E342E" edge="1" parent="1" source="mst" target="tree"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e16" style="endArrow=classic;html=1;strokeColor=#E65100;dashed=1" edge="1" parent="1" source="biaf_arc_logit" target="loss_arc"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e17" style="endArrow=classic;html=1;strokeColor=#BF360C;dashed=1" edge="1" parent="1" source="biaf_rel" target="loss_rel"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="e18" style="endArrow=classic;html=1;strokeColor=#558B2F;dashed=1" edge="1" parent="1" source="loss_total" target="opt_box"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

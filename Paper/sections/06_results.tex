@@ -1,0 +1,8 @@
+\section{Results}
+\label{sec:results}
+
+The strongest result is not that Transformers are weak, but that model bias, data scale and optimization have to match. The BiLSTM encoder encodes locality, order and short dependency chains directly, so 8.3K labeled sentences are enough to tune the biaffine head reliably. The SDPA encoders offer more flexible global interactions, but that flexibility has to be learned from the same small supervised signal. Without pre-norm and warmup it collapses; even with a 76M-parameter encoder, RoPE, SwiGLU, LayerScale and EMA, it remains below the recurrent baseline.
+
+The word-vector experiments give a second lesson. Once any reasonable 300d pretrained vector is available, dimensionality and domain choices move UAS by only a few tenths of a point. The meaningful gain is the jump from no pretraining to pretraining. For this treebank, pretrained lexical coverage matters more than fine distinctions among Chinese-Word-Vectors domains.
+
+The optimizer story is conditional as well. Adam is the safest short-run default, SGD is a useful negative control, and Muon becomes attractive only when the schedule gives its orthogonalized updates enough time to refine the solution. Our best practical recipe is therefore simple. Keep the BiLSTM--biaffine architecture, use pretrained word vectors, and spend the engineering budget on warmup, cosine decay, logging and checkpoint hygiene before scaling a Transformer from scratch.

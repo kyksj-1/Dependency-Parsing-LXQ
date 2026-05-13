@@ -1,0 +1,54 @@
+\section{Training recipes}
+\label{app:recipes}
+
+This appendix collects the three training recipes used to produce the headline numbers of Section~\ref{sec:experiment}. Recipes are presented as INI-style key-value pairs that can be supplied verbatim to the project's \texttt{--override} command-line interface.
+
+\paragraph{Recipe A, BiLSTM baseline (Stage-1 style).}
+
+\begin{verbatim}
+[Encoder]   type = lstm
+            lstm_hiddens = 400
+            lstm_layers = 3
+[Optimizer] adam = True
+            learning_rate = 0.001    ; betas = (0.9, 0.9) hard-coded
+            weight_decay = 1e-9
+            clip_max_norm = 9
+[Train]     epochs = 50
+            batch_size = 32, update_batch_size = 4
+\end{verbatim}
+
+\paragraph{Recipe B, BiLSTM with Muon (best run on this corpus).}
+
+\begin{verbatim}
+[Encoder]   type = lstm
+[Optimizer] muon = True
+            learning_rate = 0.02
+[Train]     epochs = 100
+            use_warmup_cosine = True
+            warmup_steps = 500
+            min_lr_ratio = 0.05
+\end{verbatim}
+
+\paragraph{Recipe C, 76M SDPA Transformer (largest encoder we tested).}
+
+\begin{verbatim}
+[Encoder]   type = transformer_large
+            large_d_model = 768
+            large_nhead = 12
+            large_num_layers = 8
+            large_ff_size = 3072
+            large_dropout = 0.4
+            large_layerscale_init = 1e-4
+            large_use_rope = True
+[Optimizer] muon = True
+            learning_rate = 0.02
+            weight_decay = 0.01
+[Train]     epochs = 100
+            batch_size = 32, update_batch_size = 4
+            use_warmup_cosine = True
+            warmup_steps = 1500
+            min_lr_ratio = 0.01
+            use_ema = True
+            ema_decay = 0.999
+            dropout_emb = 0.5
+\end{verbatim}

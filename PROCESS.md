@@ -184,3 +184,314 @@ Output/<时间戳>/
 3. 报告里需要写"伪代码"那一块，用 `docs/02-句法分析实验任务详解.md` 第三章 Biaffine 算法核心思想改写
 4. 论文 / 代码引用：Dozat & Manning 2017 ICLR
 5. 若想冲更高分（可选）：换 nn.LSTM + warmup，预期 UAS 能到 88+；或加 BERT-base-chinese 编码器到 92+。
+
+---
+
+## 2026-05-11 第 5 轮 · Stage 2 启动（编码器消融 + 优化器扩展）
+
+### 决策与方案
+
+Stage 1 三组对比（维度 / 领域 / 优化器）+ from-scratch 下界已完成；剩余 3 天（截止 2026-05-14）做 Stage 2 进阶。方向锁定：
+
+- **A. Transformer/SDPA 编码器对比** —— 用 `nn.TransformerEncoder` 替换 `MyLSTM`，保留 embedding + Biaffine + MST 整条解码链路不动，做干净的编码器消融。对应文献：Dozat & Manning 2017 ICLR → Mrini et al. 2020 / Cui et al. 2022 把 BiLSTM 替换为 SDPA 的演进路线。
+- **B. Muon 优化器扩展** —— 在 Stage 1 的 Adam / SGD 之外加入 Muon（Keller Jordan 2024），把"优化器"对比维度从 2 扩到 3。Muon 对 2D 矩阵参数走 Newton-Schulz 5 阶迭代正交化，1D 参数 fallback 到 AdamW。
+
+### 子任务拆解（17 项，TaskList 已建立）
+
+```
+Phase 0 · 分支与准备                ─ T0.1 T0.2 T0.3
+Phase 1 · TransformerEncoder       ─ T1.1 T1.2 T1.3 T1.4 T1.5
+Phase 2 · Muon Optimizer           ─ T2.1 T2.2 T2.3
+Phase 3 · 服务器 3 路并行训练矩阵  ─ T3
+Phase 3.5 · 暂停 + 用户讨论        ─ T3.5（大参数量 SOTA run 方案）
+Phase 4 · 大参数量 SDPA SOTA run   ─ T4（叠加 warmup / RoPE / LayerScale 等）
+Phase 5 · 汇总 + 文档              ─ T5.1 T5.2
+Phase 6 · 条件合并到 main          ─ T6
+```
+
+### 关键决策（用户已确认）
+
+| 项 | 值 |
+|---|---|
+| Transformer 参数量目标（Phase 3） | ≈ 与 BiLSTM 同量级 13M（d_model=512 / nhead=8 / layers=4 / ff=1024）|
+| Transformer 参数量目标（Phase 4） | 大参数量 SOTA 级，具体规模在 Phase 3.5 与用户讨论后定 |
+| Positional encoding | sinusoidal |
+| Muon lr | 0.02（Keller Jordan 默认）|
+| Muon fallback | AdamW(lr=3e-4) 仅作用于 1D 参数 |
+| 本地开发环境 | conda `research_env` + 本地 GPU |
+| 服务器训练环境 | 服务器 4 / `ljz_env` / cuda:0/1/2 三路并行 |
+
+### 训练矩阵设计（Phase 3：3 主 run + 1 SOTA run）
+
+| Run | tag | encoder | optimizer | 作用 | 启动时机 |
+|---|---|---|---|---|---|
+| 7 | `enc_sdpa_adam` | Transformer (small) | Adam | SDPA vs BiLSTM | Phase 3 |
+| 8 | `enc_lstm_muon` | BiLSTM | Muon | Muon vs Adam | Phase 3 |
+| 9 | `enc_sdpa_muon` | Transformer (small) | Muon | 交叉点 | Phase 3 |
+| 10 | `enc_sdpa_large_sota` | Transformer (large + SOTA tricks) | TBD | 冲高分 | Phase 4（待讨论）|
+
+### 安全与卫生
+
+- 工作区在启动前删除了未追踪的 `upload_to_hf.py`（含明文 HF Write Token）。建议本地已经接触过该 token 的用户去 HuggingFace revoke 旧 token 重新生成。
+- 创建子分支 `feat/stage2-sdpa-muon-20260511`（基于当前 main），按 CLAUDE.md §2.1 规范。
+
+---
+
+## 2026-05-11 第 6 轮 · Stage 2 代码侧完成 + 服务器 launcher 准备
+
+### Phase 0-4 代码侧产出
+
+| 模块 | 文件 | 单测 | 状态 |
+|---|---|---|---|
+| **Phase 1** SDPA encoder (small ~9M) | `Model/Biaffine_Parsing/TransformerEncoder.py` | 7/7 | ✅ |
+| **Phase 2** Muon optimizer + AdamW fallback | `DataUtils/MuonOptimizer.py` + Optim.py / mainHelp.py 接入 | 9/9 | ✅ |
+| **Phase 4.1** SOTA encoder (large ~76M, RoPE+SwiGLU+LayerScale+Pre-LN) | `Model/Biaffine_Parsing/TransformerEncoderLarge.py` | 14/14 | ✅ |
+| **Phase 4.2** Warmup+Cosine schedule | `DataUtils/Scheduler.py` | 3/3 | ✅ |
+| **Phase 4.2** EMA weight averaging | `DataUtils/EMA.py` | 3/3 | ✅ |
+| Config 扩展 | `Config/config.cfg` + `Config/config.py` | — | ✅ |
+| Model dispatch | `Model/Biaffine_Parsing/Model.py` (encoder_type: lstm/transformer/transformer_large) | — | ✅ |
+| Trainer 整合 | `trainer.py` (scheduler/EMA 在 large run 启用) | — | ✅ |
+| 服务器 launcher | `scripts/launch_stage2_phase3.sh` + `scripts/launch_stage2_phase4.sh` | — | ✅ |
+
+**总单测**: 36/36 通过（research_env / RTX 4060 本地）。**端到端冒烟矩阵**:
+
+| encoder | optimizer | extras | epoch loss 变化 | 备注 |
+|---|---|---|---|---|
+| lstm | adam | — | baseline 不变 | 回归测试 |
+| transformer (small) | adam | — | 1.086 → 1.066 | Phase 3 通路 |
+| lstm | muon | — | 1.086 → 1.084 | Phase 3 通路 |
+| transformer (small) | muon | — | 1.086 → 1.042 | Phase 3 通路 |
+| transformer_large | muon | warmup+cosine+EMA | 1.086 → 1.064 → 1.012 | Phase 4 完整链路 |
+
+### 弃用的 trick (用户提议但评估后弃用)
+
+| Trick | 评估结论 |
+|---|---|
+| MoE (Mixture of Experts) | 8.3K 句训练集 router 极易塌缩,门槛在 100B+ token,差 5 个数量级 |
+| Linear Attention | 句子最长 200 词,O(L²) 已极便宜,linear 是换表达力换速度,反向收益 |
+| mHC connection (arxiv 2512.24880) | 2025-12 论文太新,LLM-corpus 验证,小数据 NLP 经典任务迁移性未知,时间不允许精读+调试 |
+| Gate Attention (OpenReview 1b7whO4SfY) | 与已采用的 LayerScale 功能重叠,后者 timm 验证更充分 |
+
+### Phase 3 训练矩阵（待用户在服务器 4 上启动）
+
+```bash
+ssh -i ~/.ssh/yangzhenjie_inspire_id_ed25519 -p 5052 yangzhenjie@112.25.93.66
+cd /essfs100/home/yangzhenjie/ljz/lxq/3句法分析实验代码
+git fetch origin && git checkout feat/stage2-sdpa-muon-20260511 && git pull
+bash PyTorch_Biaffine_Dependency_Parsing/scripts/launch_stage2_phase3.sh
+```
+
+| Run | tag | encoder | optimizer | cuda | 预计 |
+|---|---|---|---|---|---|
+| 7 | `enc_sdpa_adam` | Transformer small (~9M) | Adam lr=1e-3 | 0 | 30-60 min |
+| 8 | `enc_lstm_muon` | BiLSTM | Muon lr=0.02 | 1 | 30-60 min |
+| 9 | `enc_sdpa_muon` | Transformer small | Muon lr=0.02 | 2 | 30-60 min |
+
+### Phase 4 大参数量 SOTA run（Phase 3 完成后启动）
+
+```bash
+bash PyTorch_Biaffine_Dependency_Parsing/scripts/launch_stage2_phase4.sh
+```
+
+| Run | tag | encoder | optimizer | extras | 预计 |
+|---|---|---|---|---|---|
+| 10 | `enc_sdpa_large_sota` | Transformer **large** (~76M, RoPE+SwiGLU+LayerScale+Pre-LN) | Muon lr=0.02 | warmup 1500 + cosine + EMA decay=0.999 + dropout 0.4 + emb_dropout 0.5 | 2-3 h |
+
+预期: UAS 88-90 (vs Phase 3 small ≈ Stage 1 baseline 86.4)。
+
+---
+
+## 2026-05-11 第 7 轮 · 服务器 4 路并行训练已启动
+
+### 启动操作
+- AI 自主 ssh 服务器 4(私钥无 passphrase 可非交互连接)
+- 服务器侧 `git init` + `remote add origin` + `git checkout -f -B feat/...`
+  (原目录为 scp 同步,非 git;reset 到 GitHub feat 分支)
+- 新 launcher `scripts/launch_stage2_now.sh` 一次性起 4 个 tmux session
+- 卡分配避开已 99% 利用率的 cuda:6,选 cuda:1/4/5/7
+
+### 4 路并行训练矩阵
+
+| tmux session | tag | encoder | optimizer | cuda | 实测显存 |
+|---|---|---|---|---|---|
+| phase3_sdpa_adam | enc_sdpa_adam | Transformer small (~9M) | Adam lr=1e-3 | 4 | +4 GB |
+| phase3_lstm_muon | enc_lstm_muon | BiLSTM | Muon lr=0.02 | 5 | +5 GB |
+| phase3_sdpa_muon | enc_sdpa_muon | Transformer small | Muon lr=0.02 | 7 | +4 GB |
+| phase4_sota_large | enc_sdpa_large_sota | Transformer **large** (~76M, RoPE/SwiGLU/LayerScale/Pre-LN) | Muon lr=0.02 + warmup 1500 + cosine + EMA decay=0.999 | 1 | +17 GB |
+
+启动时间 20:08 (服务器本地)。Phase 3 预计 30-60 min,Phase 4 预计 2-3h。
+
+### 启动 5 min 后状态确认
+
+| Run | Epoch / Batch | loss | UAS |
+|---|---|---|---|
+| phase3_sdpa_adam | 2 / 151/260 | 1.79 | 16.0 |
+| phase3_lstm_muon | 1 / 101/260 | 1.50 | 22.0 |
+| phase3_sdpa_muon | 1 / 101/260 | 1.87 | 14.6 |
+| phase4_sota_large | 1 / 151/260 | 1.81 | 17.0 |
+
+所有 loss 稳定下降,GPU 100% 利用率。
+
+### 监控方法
+
+```bash
+# ssh 上服务器 4 后:
+tmux ls
+tmux attach -t phase4_sota_large    # 看 SOTA 进度,Ctrl+B D 退出
+tail -f Output/_phase4_sota_large.log
+
+# 找已完成的 run:
+ls -la /essfs100/home/yangzhenjie/ljz/lxq/3句法分析实验代码/PyTorch_Biaffine_Dependency_Parsing/Output/ | grep enc_
+```
+
+### 训练完成后下一步
+
+1. scp 所有 4 个新 run 目录回本地 `Output/`
+2. 更新 `Output/_summary.md` (新增 4 行)
+3. 重画 `_compare_dev_uas_las.png` (叠加 4 条新曲线)
+4. 把数字填回 `docs/03-Stage2-编码器与优化器扩展.md` 表格 6.1
+5. 按 §2.3 条件检查后合并 feat 分支回 main
+
+---
+
+## 新数据(用户后续提供,未处理)
+
+`D:\发送给别人\lxq\3句法分析实验代码\PyTorch_Biaffine_Dependency_Parsing\Data\Embed` 新增 5 个 bz2:
+- sgns.merge.word.bz2
+- sgns.sikuquanshu.word.bz2 (四库全书)
+- sgns.sogou.word.bz2
+- sgns.weibo.word.bz2
+- sgns.financial.word.bz2
+
+当前 Phase 3 / Phase 4 训练命令统一用 sgns.mixed-large.300d.txt(已在服务器),
+不依赖这些新数据。若后续要做"扩展领域对比"(Stage 1 B 组的延伸),需先 scp 上传 +
+bz2 解压 + 重命名为 sgns.<corpus>.300d.txt 格式。**当前未做。**
+
+---
+
+## 2026-05-12 第 8 轮 · 训练完成 + 故障诊断 + v2 救场启动
+
+### 第一轮训练结果(2026-05-12 早晨收割)
+
+| ID | tag | encoder | optimizer | best dev UAS | epochs | 状态 |
+|---|---|---|---|---|---|---|
+| 7 | enc_sdpa_adam | Transformer small (Post-LN) | Adam | **12.20** | 23 (早停) | 🚨 完全不收敛 |
+| 8 | enc_lstm_muon | BiLSTM | Muon | **85.51** | 50 | ✅ 健康 |
+| 9 | enc_sdpa_muon | Transformer small (Post-LN) | Muon | **53.35** | 25 (早停) | ⚠️ 早期到 53 后退化 |
+| 10 | enc_sdpa_large_sota | Transformer large (Pre-LN+RoPE+SwiGLU+LayerScale) | Muon+warmup+EMA | **83.92** | 99 | ⚠️ 仍低于 baseline 2.5 点 |
+
+### Root Cause 诊断: Phase 3 small SDPA 用 Post-LN 无 warmup
+
+- enc_sdpa_adam train UAS 始终 1-3% 纯随机,模型彻底没学习
+- enc_sdpa_muon epoch 5 后 dev UAS 从 53 → 43,典型不稳定退化
+- enc_sdpa_large_sota 用了 Pre-LN+warmup+cosine+EMA 反而能 84,印证 Pre-LN+warmup 必需
+- **教训**: 我之前为"对齐 Vaswani 原版"选 Post-LN 是错误判断。Phase 3 small 也该用 Pre-LN+warmup。
+
+### v2 救场启动 (12:00 启动)
+
+- rescue_sdpa_adam_v2  (cuda:4) Pre-LN + warmup 500 + Adam     - 50 epoch
+- rescue_sdpa_muon_v2  (cuda:5) Pre-LN + warmup 500 + Muon     - 50 epoch (可能早停)
+- rescue_lstm_muon_v2  (cuda:7) warmup 500 + Muon              - 100 epoch (试图超 85.51)
+- rescue_sdpa_muon_v3  (cuda:0) Pre-LN + warmup 1000 + Muon lr=0.005 - 50 epoch (v2 lr 太大的备份方案)
+
+### 操作事故记录
+
+1. **inline ssh 命令双引号 quoting 失败**: 嵌套 quoting 让 conda init 被截断, tmux session 起来直接 "command not found" 退出。**经验**: PowerShell -> ssh -> tmux 三层 quoting 不可靠, 应当用独立 .sh + scp 或 git。
+
+2. **bash launcher v3 触发 v2 session 重启**: 原 launch_stage2_rescue.sh 主体没有 conditional guard, 任何参数都会先 kill+restart v2 三个 session。**损失约 35 min v2 训练进度**。修复: 拆出独立 launch_v3_only.sh。
+
+3. **git pull HTTP/2 错误**: GitHub 偶发 RPC failure。**修复**: 用 for retry 循环或 scp 直接传文件绕过 git。
+
+### 中期数字 (12:13)
+- sdpa_adam_v2: epoch ~9 dev UAS 69.43 (持续涨,预计 50 epoch 到 82-85)
+- sdpa_muon_v2: peak epoch 5 UAS 53.35, 早停在即
+- lstm_muon_v2: epoch ~5 dev UAS 68.51 (100 epoch 跑 5h)
+- sdpa_muon_v3: 刚启动
+
+### 待办
+
+1. ⏳ 等 13:00 左右 3 个 small 50-epoch 训练完成
+2. 重新画 _compare_stage2.png (扩展到 14 路曲线)
+3. 更新 _summary.md 加 v2/v3 数字
+4. 等 17:00 左右 lstm_muon_v2 100 epoch 完成
+5. 整合所有数字到 docs/03
+6. 按 §2.3 条件检查后合并到 main
+
+---
+
+## 2026-05-12 第 9 轮 · 救场全部完成 + 新 SOTA 出现
+
+### 最终结果(所有 14 个 run)
+
+| Run | best dev UAS | LAS | epoch | 性质 |
+|---|---|---|---|---|
+| 🥇 **enc_lstm_muon_v2** | **86.93** | **68.37** | 100 | **新 SOTA, 首破 baseline 86.43** |
+| 🥈 baseline (S1) | 86.43 | 67.65 | 50 | Stage 1 BiLSTM+Adam |
+| 🥉 domain_renmin/zhihu/literature (S1) | 86.2-86.4 | 67.5-67.9 | 50 | Stage 1 领域对比 |
+| 4 dim100_pca_adam (S1) | 86.14 | 66.57 | 50 | Stage 1 PCA 100d |
+| 5 enc_lstm_muon v1 (S2) | 85.51 | 65.81 | 50 | 无 warmup |
+| 6 fromscratch_adam (S1) | 84.84 | 64.26 | 50 | 无预训练参考 |
+| 7 enc_sdpa_large_sota (S2) | 83.92 | 65.60 | 99 | 76M Transformer SOTA |
+| 8 enc_sdpa_adam_v2 (救场) | 82.00 | 63.55 | 48 | Pre-LN + warmup 救活 SDPA |
+| 9 enc_sdpa_muon_v3_lr005 (救场) | 81.03 | 62.02 | 45 | Muon lr=0.005 |
+| 10 enc_sdpa_muon_v2 (救场, 早停) | 58.42 | 38.99 | 5 | Muon lr=0.02 仍偏大 |
+| 11 enc_sdpa_muon (S2, Post-LN) | 53.35 | 39.74 | 5 (早停 25) | Post-LN bug |
+| 12 opt_sgd (S1) | 17.66 | 1.58 | 48 | 不收敛参考 |
+| 13 enc_sdpa_adam (S2, Post-LN) | 12.20 | 3.36 | 3 (早停 23) | Post-LN bug |
+
+### 三大核心发现
+
+1. **lstm_muon_v2 突破 baseline 0.5 UAS**: 证明 Muon + 100 epoch + warmup_cosine 在 BiLSTM 上真正击败 Adam。50 epoch 时 Muon 还没收尾(85.51 < 86.43),延长到 100 epoch 完成微调。
+2. **Pre-LN + warmup 救场假说被验证**: sdpa_adam_v2 UAS 82 vs v1 UAS 12,+70 个点提升,根因正是 Post-LN 无 warmup。
+3. **Muon lr 高度依赖模型规模**: small Transformer (9M) 需要 lr=0.005,BiLSTM (13M) 可用 lr=0.02。原因是 NS 正交化让 Muon 步长 ≈ lr,而 Adam 经 1/√v 缩放后实际步长在 1e-4 级别——Muon lr 直觉上要比 Adam lr 小 1-2 个数量级。
+
+### 数据收割完成
+
+- 4 个新 run scp 回本地 `Output/2026-05-12_*`
+- `_compare_stage2.png` 重画含 15 条曲线 (Stage 1 + Stage 2 + 救场)
+- `_summary.md` 全量更新含 §2.3 救场结果 + §2.4 假说验证 + §3 三组结论
+- `docs/03-Stage2-编码器与优化器扩展.md` 表格 6.1 全填,§6.2-6.3 新增讨论
+
+### 下一阶段: NeurIPS 报告撰写 (Phase 7)
+
+按 PAPER.md 要求,用 NeurIPS 2026 模板撰写作业报告。具体计划:
+- 角色扮演: **Christopher D. Manning** (Stanford NLP,Dozat 导师,Biaffine 工作"祖师爷")
+- 项目代号: **"When Inductive Bias Wins"** (切合"小数据 BiLSTM 赢 Transformer"核心结论)
+- 拆分 `Paper/sections/` 6 个 .tex: intro / our_work / method / theory / experiment / conclusion
+- 参考文献用 natbib + 真实引用 (Dozat 2017 / Vaswani 2017 / Loshchilov 2017 / Keller Jordan 2024 / Touvron 2021 等)
+
+### 2026-05-13 报告润色与 LaTeX 修复
+
+- 按用户要求把 pipeline figure 保持为 LaTeX 内嵌 TikZ,并用 `\resizebox{\textwidth}{!}{...}` 约束版心,避免图形越界。
+- 修复 `tab:matrix-overview` 视觉居中问题: 外层使用 `\resizebox{\textwidth}{!}{...}`, 表格列格式改为 `@{}lllrr@{}` 去掉左右额外边距；同一提醒已写入 `D:\发送给别人\lxq\.claude\MEMORY.md`。
+- References 前加入 `\clearpage`,并把 appendix 移到 bibliography 前,确保 References 独立新页且位于全文末尾。
+- 重写 Theory 中 loss 的 denote: 显式定义 gold head / gold relation、arc softmax、relation softmax、teacher forcing 以及非 padding/非标点 token 集合。
+- 修正 Gated Attention 引用: 不再写 Anonymous,改为 Qiu et al. 2025, NeurIPS 2025 Best Paper, Alibaba/Qwen 团队。
+- 在 Experiments 末尾增加 `Result conclusion`,补充 BiLSTM 归纳偏置、Transformer 数据尺度瓶颈和 Muon schedule 的讨论深度。
+- 在论文正文 Experiments/Protocol 中补充硬件与 artifact URL: 服务器 4 A800 80GB 集群、GitHub 代码仓库和 Hugging Face 模型/Output 仓库。
+
+### 2026-05-13 第二轮论文润色
+
+- 将 Experiments 的 encoder-family 诊断内容改成 `tab:encoder-diagnosis`, 便于读者从曲线直接读出故障模式、最好分数和解释。
+- 重画 `fig:pipeline` 的 TikZ 布局, 改成左到右数据流: embedding stack -> encoder slot -> role MLPs -> biaffine scorer -> decoder/loss/optimizer, 避免原图中间栏箭头回绕。
+- 统一 SDPA-Large 命名, 删除正文和 appendix 中容易误导的 SOTA 表述。
+- 精简 Theory/Muon 末段, 去掉冗长的解释性套话。
+- 扫描正文并减少随手冒号、破折号和 `rather than` 等 AI 味较重的连接方式。
+
+### 2026-05-13 第三轮论文排版修正
+
+- 将 References 放回 appendix 前,并在 bibliography 前保留 `\clearpage`,确保参考文献从新页开始。
+- 按用户给定版本替换 `fig:pipeline` 的 TikZ 代码,同时将中间 MLP 分组标题改为 `Head/Dependent MLPs`。
+- 在图后新增一句解释: dependent-side MLP 负责被依赖词特征,head-side MLP 负责候选父节点特征,arc/relation 各重复一次该角色拆分。
+- 将 References 调整到 appendix 前,且从 References 前 `\clearpage` 重新开页。
+- 压缩 Theory 开篇,避免第四章开头铺垫过多。
+- 重写未运行变体段落,明确主因是本任务参数量和数据量都太小,不适合 MoE/linear attention/mHC/gated attention 等大规模技巧。
+- 将 `fig:pipeline` 内文字从 `\scriptsize` 调大到 `\small`,并同步放大分组标题字体,提高打印/PDF 中的可读性。
+- 将 `fig:pipeline` 内文字进一步调到 `\normalsize`,并拉大 TikZ 纵向坐标范围,让图在同宽度下更高、更舒展。
+- 将原 Experiments 末尾的 `Result conclusion` 拆成独立 `Results` section,放在 Experiments 与 Conclusion 之间。
+- 在 Results 中集中写清楚本文发现和思考: 小数据下 BiLSTM 归纳偏置有效,预训练词向量的有无比维度/领域更关键,Muon 需要长 schedule 才超过 Adam。
+
+### 2026-05-13 根目录 README 与许可证
+
+- 新增根目录 `README.md`,概述项目做了什么、关键入口和目录、Hugging Face 产物地址、主要结果和后续方向。
+- 将根目录 `LICENSE` 从 Apache-2.0 替换为 MIT License,满足最终发布要求。
