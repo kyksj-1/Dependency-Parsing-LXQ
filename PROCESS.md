@@ -483,3 +483,6 @@ bz2 解压 + 重命名为 sgns.<corpus>.300d.txt 格式。**当前未做。**
 - 将 References 放回 appendix 前,并在 bibliography 前保留 `\clearpage`,确保参考文献从新页开始。
 - 按用户给定版本替换 `fig:pipeline` 的 TikZ 代码,同时将中间 MLP 分组标题改为 `Head/Dependent MLPs`。
 - 在图后新增一句解释: dependent-side MLP 负责被依赖词特征,head-side MLP 负责候选父节点特征,arc/relation 各重复一次该角色拆分。
+- 将 References 调整到 appendix 前,且从 References 前 `\clearpage` 重新开页。
+- 压缩 Theory 开篇,避免第四章开头铺垫过多。
+- 重写未运行变体段落,明确主因是本任务参数量和数据量都太小,不适合 MoE/linear attention/mHC/gated attention 等大规模技巧。
