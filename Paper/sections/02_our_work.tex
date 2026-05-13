@@ -1,14 +1,10 @@
 \section{Our Work}
 \label{sec:our_work}
 
-We describe the matrix of experiments, the headline numbers, and the unifying narrative before introducing any technical content, so that the reader can recover the take-aways without reading the rest of the paper.
-
-\paragraph{Setup.} All runs share the same Biaffine head, the same MLP projections, the same MST decoder, and the same data preprocessing pipeline; only the contextual encoder and the optimizer change. The training corpus is a 8\,301-sentence Chinese treebank derived from the NLP\&CC 2013 shared task; the development set contains 534 sentences with 12\,987 evaluable arcs after standard punctuation filtering. Word vectors are 300-dimensional skip-gram embeddings released in the Chinese-Word-Vectors collection \citep{li2018cwv}, with the mixed-large corpus used as the primary source. Unless otherwise stated, training uses gradient accumulation to a global batch of 128, a maximum of 50 epochs, and early stopping with patience 20 on development UAS.
-
-\paragraph{Experimental matrix.} Table~\ref{tab:matrix-overview} sketches the fourteen runs that contribute to the final analysis. The rows fall into three blocks. The first seven rows reproduce the 2017-style Biaffine pipeline with a BiLSTM encoder and vary either the dimensionality, the domain, or the optimizer of the word vectors and the parser, supplying the baselines and the negative controls. The middle four rows introduce the SDPA Transformer encoder at a deliberately matched parameter budget and reveal the post-norm collapse that we diagnose in Section~\ref{sec:experiment}. The final three rows present the rescue configurations (pre-norm with warmup) and a 76M-parameter SOTA Transformer that stacks every modern stability and capacity trick.
+This section gives the matrix and the headline numbers before any technical content. Table~\ref{tab:matrix-overview} lists all fourteen runs that contribute to the analysis. The training corpus is the NLP\&CC 2013 Chinese dependency treebank with 8\,301 training sentences and 534 dev sentences (12\,987 evaluable arcs after punctuation filtering). Word vectors are the Chinese-Word-Vectors release of \citet{li2018cwv}. All runs share the same Biaffine head, MLP projections and MST decoder; only the encoder, the optimizer and the word vectors vary.
 
 \begin{table}[t]
-\caption{High-level summary of the fourteen runs that anchor the paper. The 2017-style BiLSTM baseline reaches 86.43 dev UAS; the only configuration that surpasses it is the BiLSTM trained with Muon for one hundred epochs under a warmup--cosine schedule, and the largest modern Transformer (76M, pre-norm, RoPE, SwiGLU, LayerScale, EMA) stops at 83.92. Key take-away: scaling the encoder does not compensate for an 8.3K-sentence data regime, but a better optimizer schedule on the original BiLSTM does.}
+\caption{Fourteen-run training matrix on the same dev set. The Adam BiLSTM baseline reaches $86.43$ UAS; the only configuration that surpasses it is the BiLSTM trained with Muon for $100$ epochs under warmup--cosine, while the largest Transformer stops at $83.92$ UAS. Key take-away: under this 8.3K-sentence data scale, scaling the encoder underperforms scheduling the optimizer.}
 \label{tab:matrix-overview}
 \centering
 \small
@@ -18,24 +14,29 @@ Block & Encoder & Optimizer / schedule & Dev UAS & Dev LAS \\
 \midrule
 Stage-1 baseline       & BiLSTM            & Adam, 50ep                          & 86.43 & 67.65 \\
 Stage-1 100d (PCA)     & BiLSTM            & Adam, 50ep                          & 86.14 & 66.57 \\
-Stage-1 domain Renmin  & BiLSTM            & Adam, 50ep                          & 86.38 & 67.58 \\
-Stage-1 domain Zhihu   & BiLSTM            & Adam, 50ep                          & 86.29 & 67.68 \\
-Stage-1 domain Lit.    & BiLSTM            & Adam, 50ep                          & 86.23 & 67.85 \\
+Stage-1 Renmin 300d    & BiLSTM            & Adam, 50ep                          & 86.38 & 67.58 \\
+Stage-1 Zhihu 300d     & BiLSTM            & Adam, 50ep                          & 86.29 & 67.68 \\
+Stage-1 Literature 300d& BiLSTM            & Adam, 50ep                          & 86.23 & 67.85 \\
 Stage-1 from-scratch   & BiLSTM            & Adam, 50ep, no pretrain             & 84.84 & 64.26 \\
 Stage-1 SGD            & BiLSTM            & SGD, 50ep                           & 17.66 & ~1.58 \\
 \midrule
-Stage-2 SDPA post-norm & Transformer 9M    & Adam, 50ep, no warmup               & 12.20 & ~3.36 \\
-Stage-2 SDPA post-norm & Transformer 9M    & Muon, 50ep, no warmup               & 53.35 & 39.74 \\
+Stage-2 SDPA-9M PostLN & Transformer 9M    & Adam, 50ep, no warmup               & 12.20 & ~3.36 \\
+Stage-2 SDPA-9M PostLN & Transformer 9M    & Muon, 50ep, no warmup               & 53.35 & 39.74 \\
 Stage-2 BiLSTM         & BiLSTM            & Muon, 50ep, no warmup               & 85.51 & 65.81 \\
 \midrule
-Stage-2 SDPA pre-norm  & Transformer 9M    & Adam, 50ep, warmup 500              & 82.00 & 63.55 \\
-Stage-2 SDPA pre-norm  & Transformer 9M    & Muon ($\eta{=}0.005$), warmup 1000  & 81.03 & 62.02 \\
-Stage-2 SDPA SOTA      & Transformer 76M   & Muon, 100ep, warmup+cosine+EMA      & 83.92 & 65.60 \\
+Stage-2 SDPA-9M PreLN  & Transformer 9M    & Adam, 50ep, warmup 500              & 82.00 & 63.55 \\
+Stage-2 SDPA-9M PreLN  & Transformer 9M    & Muon ($\eta{=}0.005$), warmup 1000  & 81.03 & 62.02 \\
+Stage-2 SDPA-Large     & Transformer 76M   & Muon, 100ep, warmup+cosine+EMA      & 83.92 & 65.60 \\
 \textbf{Stage-2 BiLSTM} & \textbf{BiLSTM}   & \textbf{Muon, 100ep, warmup+cosine} & \textbf{86.93} & \textbf{68.37} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\paragraph{Headline findings.} Three observations carry the rest of the paper. The first observation is that the modern Transformer stack, even at eight times the parameter count of the BiLSTM baseline, does not catch up with the BiLSTM on this data scale; the gap between the two is roughly 2.5 UAS in favor of the recurrent encoder. The second observation is that within the BiLSTM family the Muon optimizer trained for one hundred epochs under a warmup--cosine schedule does measurably better than the Adam baseline (86.93 vs.\ 86.43, a 0.5 UAS gain), provided the training is allowed to run long enough; the gap reverses at fifty epochs where Adam still wins. The third observation is that the Newton--Schulz orthogonalization step in Muon has a surprising stabilizing side-effect: in the post-norm Transformer regime where Adam diverges to near-random accuracy, Muon recovers a non-trivial 53 UAS, suggesting that orthogonalized momentum updates serve as a form of implicit gradient clipping. We argue in Section~\ref{sec:experiment} that this third observation has implications beyond the parsing setting we study.
+\paragraph{Headline numbers.}
+\begin{itemize}[leftmargin=*, itemsep=2pt]
+  \item \textbf{Best dev UAS = 86.93}, by BiLSTM + Muon + 100 epochs + warmup--cosine; $+0.50$ over the Adam baseline.
+  \item \textbf{Largest Transformer = 83.92 UAS} (76M parameters, all modern tricks); $-2.51$ relative to the BiLSTM baseline.
+  \item \textbf{SDPA-9M post-norm without warmup collapses} to 12.20 UAS (Adam) or 53.35 UAS (Muon); switching to pre-norm + warmup recovers to 81--82 UAS.
+\end{itemize}
 
-\paragraph{Negative results we publish on purpose.} Several plausible Stage-2 design choices did not produce a usable result. We considered Mixture-of-Experts routing on the Transformer feed-forward block, linear-attention substitutes for the standard softmax attention, the multi-head causal connections of \citet{deepseekteam2025mhc}, and the gated-attention variant of \citet{openreview2025gateattn}. After evaluating each against the data scale and the time budget we elected to omit them; each of these methods is designed under assumptions (corpus size, sequence length, validation infrastructure) that this 8K-sentence treebank cannot supply. We document them explicitly in Section~\ref{sec:experiment} so that future work knows which paths we examined and why we declined.
+\paragraph{Variants we considered but did not run.} Mixture-of-Experts on the FFN, linear-attention substitutes, multi-head causal connections of \citet{deepseekteam2025mhc}, and the gated-attention variant of \citet{openreview2025gateattn}. Each targets a regime (much larger data, much longer sequences, or much larger pretraining) that does not match our 8.3K-sentence supervised treebank, and we omit them.
