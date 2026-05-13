@@ -495,3 +495,10 @@ bz2 解压 + 重命名为 sgns.<corpus>.300d.txt 格式。**当前未做。**
 
 - 新增根目录 `README.md`,概述项目做了什么、关键入口和目录、Hugging Face 产物地址、主要结果和后续方向。
 - 将根目录 `LICENSE` 从 Apache-2.0 替换为 MIT License,满足最终发布要求。
+
+---
+
+### 2026-05-13 清理远程误提交文件（PAPER.md）
+
+#### 已完成
+- 将 `PAPER.md` 从 git 索引移除（保留本地文件），并加入 `.gitignore`，避免后续被误提交。
