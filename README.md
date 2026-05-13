@@ -1,4 +1,6 @@
-# Dependency Parsing LXQ
+# Dependency Parsing
+
+[中文 README](README.zh-CN.md)
 
 This repository contains a course project on Chinese dependency parsing built around the Deep Biaffine Parser of Dozat and Manning. We start from a PyTorch implementation of graph-based biaffine dependency parsing, clean up the training harness, add logging and checkpointing, and run a controlled empirical study over word vectors, optimizers and encoders.
 
