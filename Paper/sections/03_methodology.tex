@@ -28,74 +28,109 @@ Figure~\ref{fig:pipeline} summarizes the parser. Word and POS tag embeddings are
     dasharr/.style={->, dashed, draw=black!45, line width=0.35pt}
   ]
 
-  \node[input] (words) at (0, 1.15) {Words\\$(B,L)$};
-  \node[input] (tags) at (0, -1.15) {POS tags\\$(B,L)$};
-  \node[embed] (wemb) at (2.05, 1.75) {learned word\\embedding};
-  \node[embed, dashed] (xemb) at (2.05, 0.35) {frozen external\\word vector};
-  \node[tag] (temb) at (2.05, -1.15) {POS\\embedding};
-  \node[circle, draw, inner sep=0.5pt, minimum size=4.6mm] (sum) at (3.55, 1.05) {$+$};
-  \node[stage, text width=28mm] (lex) at (4.65, -0.1) {lexical feature\\$[\text{word}{+}\text{ext};\text{tag}]$};
+  % ================= 1. Embedding Stack (压缩了X轴间距) =================
+  \node[input] (words) at (0, 1.9) {Words\\$(B,L)$};
+  \node[input] (tags)  at (0, -2.4) {POS tags\\$(B,L)$};
 
-  \node[enc, text width=24mm] (e1) at (7.1, 1.65) {BiLSTM\\3 layers};
-  \node[enc, text width=24mm] (e2) at (7.1, 0.25) {SDPA-9M\\4 layers};
-  \node[enc, text width=24mm] (e3) at (7.1, -1.15) {SDPA-Large\\8 layers};
-  \node[stage, text width=29mm] (hout) at (7.1, -2.45) {$\bH \in \mathbb{R}^{B\times L\times800}$\\shared interface};
+  \node[embed]         (wemb) at (2.2, 3.0) {learned word\\embedding};
+  \node[embed, dashed] (xemb) at (2.2, 0.8) {frozen external\\word vector};
+  \node[tag]           (temb) at (2.2, -2.4) {POS\\embedding};
 
-  \node[mlp] (ad) at (9.85, 1.35) {arc-dep};
-  \node[mlp] (ah) at (11.05, 1.35) {arc-head};
-  \node[mlp] (rd) at (9.85, 0.1) {rel-dep};
-  \node[mlp] (rh) at (11.05, 0.1) {rel-head};
+  \node[circle, draw, inner sep=0.5pt, minimum size=4.6mm] (sum) at (4.0, 1.9) {$+$};
+  \node[stage, text width=28mm] (lex) at (6.2, -0.25) {lexical feature\\$[\text{word}{+}\text{ext};\text{tag}]$};
 
-  \node[score, text width=40mm] (arc) at (13.55, 1.05) {$s^{arc}_{i\to j}$\\biaffine arc score};
-  \node[score, text width=40mm] (rel) at (13.55, -0.35) {$s^{rel}_{i,j,r}$\\biaffine relation score};
-  \node[stage] (mst) at (16.2, 0.95) {MST\\decoder};
-  \node[stage, font=\scriptsize\bfseries] (tree) at (18.15, 0.95) {dependency\\tree};
-  \node[train, text width=42mm] (loss) at (16.2, -1.25) {$\mathcal{L}=\mathcal{L}_{arc}+\mathcal{L}_{rel}$\\gold heads supervise relation labels};
-  \node[opt] (adam) at (13.3, -2.75) {Adam};
-  \node[opt] (sgd) at (14.75, -2.75) {SGD};
-  \node[opt] (muon) at (16.25, -2.75) {Muon};
+  % Embedding Arrows (修改为了平滑曲线)
+  \draw[arr] (words.east) to[out=0, in=180] (wemb.west);
+  \draw[arr] (words.east) to[out=0, in=180] (xemb.west);
+  \draw[arr] (tags.east) -- (temb.west);
 
+  \draw[arr] (wemb.east) to[out=0, in=90] (sum.north);
+  \draw[arr] (xemb.east) to[out=0, in=270] (sum.south);
+
+  \draw[arr] (sum.east) to[out=0, in=180] (lex.west);
+  \draw[arr] (temb.east) to[out=0, in=180] (lex.west);
+
+  % ================= 2. Encoder Slot (向右平移，避免重叠) =================
+  \node[enc, text width=24mm] (e1) at (10.5, 2.4) {BiLSTM\\3 layers};
+  \node[enc, text width=24mm] (e2) at (10.5, -0.25) {SDPA-9M\\4 layers};
+  \node[enc, text width=24mm] (e3) at (10.5, -2.9) {SDPA-Large\\8 layers};
+
+  \node[stage, text width=29mm] (hout) at (14.6, -0.25) {$\mathbf{H} \in \mathbb{R}^{B\times L\times800}$\\shared interface};
+
+  % Encoder Arrows
+  \draw[thinarr] (lex.east) to[out=0,in=180] (e1.west);
+  \draw[arr]     (lex.east) -- (e2.west);
+  \draw[thinarr] (lex.east) to[out=0,in=180] (e3.west);
+
+  \draw[arr] (e1.east) to[out=0, in=180] ([yshift=3mm]hout.west);
+  \draw[arr] (e2.east) -- (hout.west);
+  \draw[arr] (e3.east) to[out=0, in=180] ([yshift=-3mm]hout.west);
+
+  % ================= 3. Head/Dependent MLPs (增加高度，垂直单列排布) =================
+  \node[mlp] (ad) at (17.8, 2.6) {arc-dep};
+  \node[mlp] (ah) at (17.8, 0.8) {arc-head};
+  \node[mlp] (rd) at (17.8, -1.0) {rel-dep};
+  \node[mlp] (rh) at (17.8, -2.8) {rel-head};
+
+  % MLP Arrows: 使用"单干分支"直角走线，更加整洁
+  \coordinate (hout_split) at ([xshift=6.5mm]hout.east);
+  \draw[arr] (hout.east) -- (hout_split);
+  \draw[arr] (hout_split) |- (ad.west);
+  \draw[arr] (hout_split) |- (ah.west);
+  \draw[arr] (hout_split) |- (rd.west);
+  \draw[arr] (hout_split) |- (rh.west);
+
+  % ================= 4. Biaffine Scorer (增加高度) =================
+  \node[score, text width=40mm] (arc) at (22.2, 1.7) {$s^{arc}_{i\to j}$\\biaffine arc score};
+  \node[score, text width=40mm] (rel) at (22.2, -1.9) {$s^{rel}_{i,j,r}$\\biaffine relation score};
+
+  % Scorer Arrows: 稍微错开落点，避免箭头完全叠在一起
+  \draw[arr] (ad.east) to[out=0, in=180] ([yshift=3mm]arc.west);
+  \draw[arr] (ah.east) to[out=0, in=180] ([yshift=-3mm]arc.west);
+  \draw[arr] (rd.east) to[out=0, in=180] ([yshift=3mm]rel.west);
+  \draw[arr] (rh.east) to[out=0, in=180] ([yshift=-3mm]rel.west);
+
+  % ================= 5. Outputs, Loss & Optimizers =================
+  \node[stage] (mst) at (26.5, 1.7) {MST\\decoder};
+  \node[stage, font=\scriptsize\bfseries] (tree) at (28.8, 1.7) {dependency\\tree};
+
+  % 修改点：将 Loss 方框向右移动，放置于 MST 下方
+  \node[train, text width=42mm] (loss) at (27.5, -0.9) {$\mathcal{L}=\mathcal{L}_{arc}+\mathcal{L}_{rel}$\\gold heads supervise relation labels};
+
+  % 修改点：整体下移优化器，对齐 Loss
+  \node[opt] (adam) at (25.8, -4.2) {Adam};
+  \node[opt] (sgd)  at (27.5, -4.2) {SGD};
+  \node[opt] (muon) at (29.2, -4.2) {Muon};
+
+  % Final Arrows
+  \draw[arr] (arc.east) -- (mst.west);
+  \draw[arr] (mst.east) -- (tree.west);
+
+  % 评分到Loss的虚线优化
+  \draw[dasharr] (arc.east) to[out=270, in=180] (loss.west);
+  \draw[dasharr] (rel.east) to[out=90, in=180] (loss.west);
+
+  % Loss到优化器的虚线优化
+  \draw[dasharr] (loss.south) to[out=270, in=90] (adam.north);
+  \draw[dasharr] (loss.south) -- (sgd.north);
+  \draw[dasharr] (loss.south) to[out=270, in=90] (muon.north);
+
+  % ================= 6. Background Groups =================
   \begin{pgfonlayer}{background}
     \node[group, draw=blue!55!black, fit=(words)(tags)(wemb)(xemb)(temb)(sum)(lex), label={[blue!55!black,font=\bfseries]above:Embedding stack}] {};
     \node[group, draw=purple!65!black, fit=(e1)(e2)(e3)(hout), label={[purple!65!black,font=\bfseries]above:Encoder slot}] {};
-    \node[group, draw=teal!70!black, fit=(ad)(ah)(rd)(rh), label={[teal!70!black,font=\bfseries]above:Role MLPs}] {};
+    \node[group, draw=teal!70!black, fit=(ad)(ah)(rd)(rh), label={[teal!70!black,font=\bfseries]above:Head/Dependent MLPs}] {};
     \node[group, draw=red!70!black, fit=(arc)(rel), label={[red!70!black,font=\bfseries]above:Biaffine scorer}] {};
     \node[group, draw=green!60!black, fit=(adam)(sgd)(muon), label={[green!60!black,font=\bfseries]below:Optimizers}] {};
   \end{pgfonlayer}
 
-  \draw[arr] (words) -- (wemb);
-  \draw[arr] (words) -- (xemb);
-  \draw[arr] (tags) -- (temb);
-  \draw[arr] (wemb) -- (sum);
-  \draw[arr] (xemb) -- (sum);
-  \draw[arr] (sum) -- (lex);
-  \draw[arr] (temb) -- (lex);
-  \draw[thinarr] (lex.east) to[out=0,in=180] (e1.west);
-  \draw[arr] (lex.east) -- (e2.west);
-  \draw[thinarr] (lex.east) to[out=0,in=180] (e3.west);
-  \draw[arr] (e1) -- (hout);
-  \draw[arr] (e2) -- (hout);
-  \draw[arr] (e3) -- (hout);
-  \draw[arr] (hout) -- (ad);
-  \draw[arr] (hout) -- (ah);
-  \draw[arr] (hout) -- (rd);
-  \draw[arr] (hout) -- (rh);
-  \draw[arr] (ad) -- (arc);
-  \draw[arr] (ah) -- (arc);
-  \draw[arr] (rd) -- (rel);
-  \draw[arr] (rh) -- (rel);
-  \draw[arr] (arc) -- (mst);
-  \draw[arr] (mst) -- (tree);
-  \draw[dasharr] (arc) -- (loss);
-  \draw[dasharr] (rel) -- (loss);
-  \draw[dasharr] (loss) -- (muon);
-  \draw[dasharr] (loss) -- (adam);
-  \draw[dasharr] (loss) -- (sgd);
   \end{tikzpicture}
   }
   \caption{Parser pipeline. The left block builds token features, the encoder block selects one contextualizer, the middle block creates role-specific projections, and the right block scores arcs, decodes a tree, and supplies training losses. Accuracy differences in the experiments come from the encoder and optimizer choices while the biaffine head and decoder stay fixed.}
   \label{fig:pipeline}
 \end{figure}
+
+In the figure, the four MLP boxes split token representations by syntactic role. The dependent-side MLPs produce features for the token being attached, the head-side MLPs produce features for the candidate parent, and the same split is repeated for arc scoring and relation scoring.
 
 \subsection{Embedding layer}
 \label{sec:method-embedding}

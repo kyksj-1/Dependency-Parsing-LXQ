@@ -477,3 +477,9 @@ bz2 解压 + 重命名为 sgns.<corpus>.300d.txt 格式。**当前未做。**
 - 统一 SDPA-Large 命名, 删除正文和 appendix 中容易误导的 SOTA 表述。
 - 精简 Theory/Muon 末段, 去掉冗长的解释性套话。
 - 扫描正文并减少随手冒号、破折号和 `rather than` 等 AI 味较重的连接方式。
+
+### 2026-05-13 第三轮论文排版修正
+
+- 将 References 放回 appendix 前,并在 bibliography 前保留 `\clearpage`,确保参考文献从新页开始。
+- 按用户给定版本替换 `fig:pipeline` 的 TikZ 代码,同时将中间 MLP 分组标题改为 `Head/Dependent MLPs`。
+- 在图后新增一句解释: dependent-side MLP 负责被依赖词特征,head-side MLP 负责候选父节点特征,arc/relation 各重复一次该角色拆分。
