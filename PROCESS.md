@@ -469,3 +469,11 @@ bz2 解压 + 重命名为 sgns.<corpus>.300d.txt 格式。**当前未做。**
 - 修正 Gated Attention 引用: 不再写 Anonymous,改为 Qiu et al. 2025, NeurIPS 2025 Best Paper, Alibaba/Qwen 团队。
 - 在 Experiments 末尾增加 `Result conclusion`,补充 BiLSTM 归纳偏置、Transformer 数据尺度瓶颈和 Muon schedule 的讨论深度。
 - 在论文正文 Experiments/Protocol 中补充硬件与 artifact URL: 服务器 4 A800 80GB 集群、GitHub 代码仓库和 Hugging Face 模型/Output 仓库。
+
+### 2026-05-13 第二轮论文润色
+
+- 将 Experiments 的 encoder-family 诊断内容改成 `tab:encoder-diagnosis`, 便于读者从曲线直接读出故障模式、最好分数和解释。
+- 重画 `fig:pipeline` 的 TikZ 布局, 改成左到右数据流: embedding stack -> encoder slot -> role MLPs -> biaffine scorer -> decoder/loss/optimizer, 避免原图中间栏箭头回绕。
+- 统一 SDPA-Large 命名, 删除正文和 appendix 中容易误导的 SOTA 表述。
+- 精简 Theory/Muon 末段, 去掉冗长的解释性套话。
+- 扫描正文并减少随手冒号、破折号和 `rather than` 等 AI 味较重的连接方式。

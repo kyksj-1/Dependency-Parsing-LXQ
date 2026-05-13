@@ -4,120 +4,96 @@
 \subsection{Overall pipeline}
 \label{sec:method-overall}
 
-Figure~\ref{fig:pipeline} summarizes the parser. Word and POS tag embeddings are summed with a frozen pretrained word vector and concatenated, fed to a contextual encoder, projected by two MLPs into head-role and dependent-role vectors, and scored by a biaffine arc/relation module. Inference uses Chu--Liu--Edmonds MST decoding on the arc score matrix. The encoder slot accepts three implementations selected at construction time: \texttt{lstm} (the original three-layer BiLSTM), \texttt{transformer} (a parameter-matched SDPA Transformer), and \texttt{transformer\_large} (a deeper SDPA Transformer with modern training tricks). Every other component is shared across runs.
+Figure~\ref{fig:pipeline} summarizes the parser. Word and POS tag embeddings are summed with a frozen pretrained word vector and concatenated, fed to a contextual encoder, projected by two MLPs into head-role and dependent-role vectors, and scored by a biaffine arc/relation module. Inference uses Chu--Liu--Edmonds MST decoding on the arc score matrix. The encoder slot accepts three implementations selected at construction time, \texttt{lstm} (the original three-layer BiLSTM), \texttt{transformer} (a parameter-matched SDPA Transformer), and \texttt{transformer\_large} (a deeper SDPA Transformer with modern training tricks). Every other component is shared across runs.
 
 \begin{figure}[t]
   \centering
   \resizebox{\textwidth}{!}{%
   \begin{tikzpicture}[
-    font=\small,
-    >={Latex[length=2.2mm,width=1.8mm]},
-    node distance=4mm,
-    box/.style={rounded corners=3pt, draw, line width=0.5pt, inner sep=4pt, align=center, minimum height=8mm},
-    inp/.style={box, fill=gray!10},
-    embW/.style={box, fill=blue!8, draw=blue!60!black},
-    embE/.style={box, fill=blue!8, draw=blue!60!black, dashed},
-    embT/.style={box, fill=yellow!18, draw=orange!60!black},
-    lex/.style={box, fill=orange!18, draw=orange!70!black},
-    lstm/.style={box, fill=pink!25, draw=red!50!black},
-    sdpa/.style={box, fill=green!12, draw=green!50!black},
-    large/.style={box, fill=purple!12, draw=purple!60!black},
-    mlpA/.style={box, fill=cyan!18, draw=teal!70!black},
-    mlpR/.style={box, fill=teal!18, draw=teal!80!black},
-    bia/.style={box, fill=red!12, draw=red!70!black},
-    mst/.style={box, fill=brown!18, draw=brown!70!black},
-    pred/.style={box, fill=orange!22, draw=orange!80!black, font=\small\bfseries},
-    loss/.style={box, fill=orange!15, draw=orange!70!black},
-    opt/.style={box, fill=green!16, draw=green!55!black},
-    optM/.style={box, fill=green!28, draw=green!65!black},
-    grp/.style={rounded corners=5pt, draw, dashed, line width=0.6pt, inner sep=3.2mm},
-    arr/.style={->, line width=0.45pt, draw=black!70},
-    arrThick/.style={->, line width=0.9pt, draw=black!70},
-    arrD/.style={->, dashed, line width=0.45pt, draw=black!60},
+    font=\scriptsize,
+    >={Latex[length=2mm,width=1.6mm]},
+    box/.style={rounded corners=2pt, draw, line width=0.45pt, inner sep=3.2pt, align=center, minimum height=7mm},
+    group/.style={rounded corners=4pt, draw, dashed, line width=0.55pt, inner sep=3mm},
+    input/.style={box, fill=gray!8},
+    embed/.style={box, fill=blue!7, draw=blue!60!black},
+    tag/.style={box, fill=yellow!18, draw=orange!70!black},
+    stage/.style={box, fill=orange!14, draw=orange!70!black},
+    enc/.style={box, fill=purple!9, draw=purple!65!black},
+    mlp/.style={box, fill=teal!10, draw=teal!70!black},
+    score/.style={box, fill=red!8, draw=red!70!black},
+    train/.style={box, fill=orange!10, draw=orange!75!black},
+    opt/.style={box, fill=green!12, draw=green!60!black},
+    arr/.style={->, draw=black!70, line width=0.45pt},
+    thinarr/.style={->, draw=black!45, line width=0.35pt},
+    dasharr/.style={->, dashed, draw=black!45, line width=0.35pt}
   ]
 
-  % ===== Embedding stack (left top) =====
-  \node[inp] (words) at (0, 0) {Words \\ $(B, L)$};
-  \node[inp, right=10mm of words] (tags) {POS Tags \\ $(B, L)$};
+  \node[input] (words) at (0, 1.15) {Words\\$(B,L)$};
+  \node[input] (tags) at (0, -1.15) {POS tags\\$(B,L)$};
+  \node[embed] (wemb) at (2.05, 1.75) {learned word\\embedding};
+  \node[embed, dashed] (xemb) at (2.05, 0.35) {frozen external\\word vector};
+  \node[tag] (temb) at (2.05, -1.15) {POS\\embedding};
+  \node[circle, draw, inner sep=0.5pt, minimum size=4.6mm] (sum) at (3.55, 1.05) {$+$};
+  \node[stage, text width=28mm] (lex) at (4.65, -0.1) {lexical feature\\$[\text{word}{+}\text{ext};\text{tag}]$};
 
-  \node[embW, below=8mm of words.south west, anchor=north west, minimum width=18mm] (embw) {Word Embed \\ (learned, 300)};
-  \node[embE, right=1.5mm of embw, minimum width=30mm] (embe) {Pretrained ExtWord \\ (frozen, 300)};
-  \node[embT, right=1.5mm of embe, minimum width=22mm] (embt) {POS Embed \\ (learned, 100)};
+  \node[enc, text width=24mm] (e1) at (7.1, 1.65) {BiLSTM\\3 layers};
+  \node[enc, text width=24mm] (e2) at (7.1, 0.25) {SDPA-9M\\4 layers};
+  \node[enc, text width=24mm] (e3) at (7.1, -1.15) {SDPA-Large\\8 layers};
+  \node[stage, text width=29mm] (hout) at (7.1, -2.45) {$\bH \in \mathbb{R}^{B\times L\times800}$\\shared interface};
 
-  \node[circle, draw, line width=0.5pt, inner sep=0.5pt, minimum size=5mm] (sum) at ($(embw.south)!0.5!(embe.south) + (0, -7mm)$) {$\oplus$};
-  \node[lex, below=8mm of sum, minimum width=72mm, text width=70mm] (lex) {Lexical Feature $[\,\text{word}{\oplus}\text{ext}\,;\,\text{tag}\,]$, dim $= 400$ \\ with word dropout during training};
+  \node[mlp] (ad) at (9.85, 1.35) {arc-dep};
+  \node[mlp] (ah) at (11.05, 1.35) {arc-head};
+  \node[mlp] (rd) at (9.85, 0.1) {rel-dep};
+  \node[mlp] (rh) at (11.05, 0.1) {rel-head};
 
-  % ===== Encoder slot (highlighted) =====
-  \node[lstm, below=22mm of lex.south west, anchor=north west, minimum width=20mm] (lstmB) {BiLSTM 3L \\ $\sim$13M};
-  \node[sdpa, right=2mm of lstmB, minimum width=22mm] (sdpaB)  {SDPA-9M \\ 4L, $d{=}512$ \\ Post-/Pre-LN};
-  \node[large, right=2mm of sdpaB, minimum width=24mm] (largeB) {SDPA-Large \\ 8L, $d{=}768$ \\ RoPE/SwiGLU/LS};
-  \node[below=2mm of sdpaB, font=\scriptsize\itshape, text=black!60] (encsel) {encoder\_type $\in$ \{lstm, transformer, transformer\_large\}};
-  \node[lex, below=2mm of encsel, minimum width=55mm] (hh) {$\bH \in \mathbb{R}^{B \times L \times 800}$ \quad (common interface)};
+  \node[score, text width=40mm] (arc) at (13.55, 1.05) {$s^{arc}_{i\to j}$\\biaffine arc score};
+  \node[score, text width=40mm] (rel) at (13.55, -0.35) {$s^{rel}_{i,j,r}$\\biaffine relation score};
+  \node[stage] (mst) at (16.2, 0.95) {MST\\decoder};
+  \node[stage, font=\scriptsize\bfseries] (tree) at (18.15, 0.95) {dependency\\tree};
+  \node[train, text width=42mm] (loss) at (16.2, -1.25) {$\mathcal{L}=\mathcal{L}_{arc}+\mathcal{L}_{rel}$\\gold heads supervise relation labels};
+  \node[opt] (adam) at (13.3, -2.75) {Adam};
+  \node[opt] (sgd) at (14.75, -2.75) {SGD};
+  \node[opt] (muon) at (16.25, -2.75) {Muon};
+
   \begin{pgfonlayer}{background}
-    \node[grp, draw=purple!60!black, fit=(lstmB)(sdpaB)(largeB)(encsel)(hh), label={[purple!60!black,font=\bfseries\small]above:Contextual Encoder (one of three)}] (encgrp) {};
+    \node[group, draw=blue!55!black, fit=(words)(tags)(wemb)(xemb)(temb)(sum)(lex), label={[blue!55!black,font=\bfseries]above:Embedding stack}] {};
+    \node[group, draw=purple!65!black, fit=(e1)(e2)(e3)(hout), label={[purple!65!black,font=\bfseries]above:Encoder slot}] {};
+    \node[group, draw=teal!70!black, fit=(ad)(ah)(rd)(rh), label={[teal!70!black,font=\bfseries]above:Role MLPs}] {};
+    \node[group, draw=red!70!black, fit=(arc)(rel), label={[red!70!black,font=\bfseries]above:Biaffine scorer}] {};
+    \node[group, draw=green!60!black, fit=(adam)(sgd)(muon), label={[green!60!black,font=\bfseries]below:Optimizers}] {};
   \end{pgfonlayer}
 
-  % ===== MLP projections (right top) =====
-  \node[mlpA] (mlpAD) at (88mm, 6mm) {MLP \\ arc-dep};
-  \node[mlpA, right=4mm of mlpAD] (mlpAH) {MLP \\ arc-head};
-  \node[mlpR, below=4mm of mlpAD] (mlpRD) {MLP \\ rel-dep};
-  \node[mlpR, right=4mm of mlpRD] (mlpRH) {MLP \\ rel-head};
-  \begin{pgfonlayer}{background}
-    \node[grp, draw=teal!80!black, fit=(mlpAD)(mlpAH)(mlpRD)(mlpRH), label={[teal!80!black,font=\bfseries\small]above:Role-specific MLP projections}] (mlpgrp) {};
-  \end{pgfonlayer}
-
-  % ===== Biaffine scorer (right middle) =====
-  \node[bia, below=22mm of mlpgrp.south west, anchor=north west, minimum width=60mm] (biaArc) {$s_{arc}(i{\to}j) = h_i^{\!\top} \bW_{arc} h_j + b^{\!\top} h_j$};
-  \node[lex, below=2mm of biaArc, minimum width=55mm] (arclog) {$arc\_logit \in \mathbb{R}^{B \times L \times L}$};
-  \node[bia, fill=orange!18, draw=red!70!black, below=2mm of arclog, minimum width=55mm, text width=53mm] (rellog) {$rel\_logit \in \mathbb{R}^{B \times L \times L \times R}$ \\ (trilinear, per-relation)};
-  \begin{pgfonlayer}{background}
-    \node[grp, draw=red!70!black, fit=(biaArc)(arclog)(rellog), label={[red!70!black,font=\bfseries\small]above:Biaffine Scorer}] (biagrp) {};
-  \end{pgfonlayer}
-
-  % ===== MST decoder + tree (far right) =====
-  \node[mst, right=12mm of arclog] (mst) {MST Decode \\ (Chu--Liu--Edmonds)};
-  \node[pred, right=4mm of mst] (tree) {Predicted Tree \\ $\{(\text{head}_i, \text{rel}_i)\}$};
-
-  % ===== Loss panel (far right top) =====
-  \node[loss, above=20mm of mst, minimum width=70mm, text width=68mm] (lossArc) {$\mathcal{L}_{arc} = -\frac{1}{N}\sum_i \log p_{arc}(i \to y_i^{\text{head}})$};
-  \node[loss, above=2mm of lossArc, minimum width=70mm, text width=68mm] (lossRel) {$\mathcal{L}_{rel} = -\frac{1}{N}\sum_i \log p_{rel}(i, y_i^{\text{head}}, y_i^{\text{rel}})$};
-  \node[loss, fill=orange!28, font=\bfseries, above=2mm of lossRel, minimum width=40mm] (lossT) {$\mathcal{L} = \mathcal{L}_{arc} + \mathcal{L}_{rel}$};
-  \begin{pgfonlayer}{background}
-    \node[grp, draw=orange!80!black, dashed=false, fit=(lossArc)(lossRel)(lossT), label={[orange!80!black,font=\bfseries\small]above:Training Objective}] (lossgrp) {};
-  \end{pgfonlayer}
-
-  % ===== Optimizer panel (far right bottom) =====
-  \node[opt, below=20mm of tree.south, anchor=north] (optAdam) {Adam};
-  \node[opt, right=3mm of optAdam] (optSGD) {SGD \\ (control)};
-  \node[optM, right=3mm of optSGD] (optMuon) {Muon \\ (NS-5 ortho)};
-  \begin{pgfonlayer}{background}
-    \node[grp, draw=green!55!black, dashed=false, fit=(optAdam)(optSGD)(optMuon), label={[green!55!black,font=\bfseries\small]above:Optimizers compared}] (optgrp) {};
-  \end{pgfonlayer}
-
-  % ===== Arrows: forward path =====
-  \draw[arr] (words) -- (embw);
-  \draw[arr] (words) -- (embe);
-  \draw[arr] (tags) -- (embt);
-  \draw[arr] (embw) -- (sum);
-  \draw[arr] (embe) -- (sum);
+  \draw[arr] (words) -- (wemb);
+  \draw[arr] (words) -- (xemb);
+  \draw[arr] (tags) -- (temb);
+  \draw[arr] (wemb) -- (sum);
+  \draw[arr] (xemb) -- (sum);
   \draw[arr] (sum) -- (lex);
-  \draw[arr] (embt.south) |- (lex.east);
-  \draw[arrThick, draw=purple!60!black] (lex.south) -- ([yshift=2mm]encgrp.north);
-  \draw[arrThick] (hh.east) to[out=0,in=180] (mlpgrp.west);
-  \draw[arr, draw=teal!70!black] (mlpAD) -- (biaArc);
-  \draw[arr, draw=teal!70!black] (mlpAH) -- (biaArc);
-  \draw[arr, draw=teal!80!black] (mlpRD) -- (rellog);
-  \draw[arr, draw=teal!80!black] (mlpRH) -- (rellog);
-  \draw[arr, draw=red!70!black] (arclog) -- (mst);
-  \draw[arr, draw=brown!70!black] (mst) -- (tree);
-  % Loss arrows (dashed, downstream of biaffine)
-  \draw[arrD, draw=orange!70!black] (arclog.east) to[out=0,in=180] (lossArc.west);
-  \draw[arrD, draw=orange!70!black] (rellog.east) to[out=0,in=180] (lossRel.west);
-  \draw[arrD, draw=green!55!black] (lossT.south) to[out=-90,in=90] (optgrp.north);
-
+  \draw[arr] (temb) -- (lex);
+  \draw[thinarr] (lex.east) to[out=0,in=180] (e1.west);
+  \draw[arr] (lex.east) -- (e2.west);
+  \draw[thinarr] (lex.east) to[out=0,in=180] (e3.west);
+  \draw[arr] (e1) -- (hout);
+  \draw[arr] (e2) -- (hout);
+  \draw[arr] (e3) -- (hout);
+  \draw[arr] (hout) -- (ad);
+  \draw[arr] (hout) -- (ah);
+  \draw[arr] (hout) -- (rd);
+  \draw[arr] (hout) -- (rh);
+  \draw[arr] (ad) -- (arc);
+  \draw[arr] (ah) -- (arc);
+  \draw[arr] (rd) -- (rel);
+  \draw[arr] (rh) -- (rel);
+  \draw[arr] (arc) -- (mst);
+  \draw[arr] (mst) -- (tree);
+  \draw[dasharr] (arc) -- (loss);
+  \draw[dasharr] (rel) -- (loss);
+  \draw[dasharr] (loss) -- (muon);
+  \draw[dasharr] (loss) -- (adam);
+  \draw[dasharr] (loss) -- (sgd);
   \end{tikzpicture}
   }
-  \caption{Biaffine dependency parsing pipeline. Three encoder slots (BiLSTM, SDPA-9M, SDPA-Large) plug into the same embedding stack on the left and the same biaffine--MST head on the right; only the encoder and the optimizer change across our fourteen runs. Solid arrows denote forward computation; dashed arrows denote the loss path. Key take-away: every accuracy difference reported is attributable to the encoder slot or the optimizer slot, not to the rest of the harness.}
+  \caption{Parser pipeline. The left block builds token features, the encoder block selects one contextualizer, the middle block creates role-specific projections, and the right block scores arcs, decodes a tree, and supplies training losses. Accuracy differences in the experiments come from the encoder and optimizer choices while the biaffine head and decoder stay fixed.}
   \label{fig:pipeline}
 \end{figure}
 
@@ -133,9 +109,9 @@ Three encoders plug into the same interface, all producing $\bH\in\mathbb{R}^{L\
 
 \paragraph{BiLSTM.} Three-layer bidirectional LSTM with 400 hidden units per direction, orthonormal recurrent initialization \citep{dozat2017biaffine}, and variational dropout (the same dropout mask reused across timesteps within a sequence). Implemented on top of \texttt{nn.LSTMCell}. About 13M parameters.
 
-\paragraph{SDPA-9M.} Four-layer Transformer with $d_{\text{model}}=512$, $h=8$ heads, $d_{\text{ff}}=1024$, sinusoidal positional encoding. Parameter count is matched to the BiLSTM (about 9M) so that the encoder-family comparison is not contaminated by capacity. Padding is handled by an explicit \texttt{key\_padding\_mask}, and padding positions are zeroed before the output projection so that the bilinear scorer is not fed attention-leaked noise. We run two layout variants of this encoder: \emph{post-norm} (Vaswani-style $\bX'=\text{LN}(\bX+\text{Sub}(\bX))$) and \emph{pre-norm} ($\bX'=\bX+\text{Sub}(\text{LN}(\bX))$, \citealt{xiong2020lnorder}).
+\paragraph{SDPA-9M.} Four-layer Transformer with $d_{\text{model}}=512$, $h=8$ heads, $d_{\text{ff}}=1024$, sinusoidal positional encoding. Parameter count is matched to the BiLSTM (about 9M) so that the encoder-family comparison is not contaminated by capacity. Padding is handled by an explicit \texttt{key\_padding\_mask}, and padding positions are zeroed before the output projection so that the bilinear scorer is not fed attention-leaked noise. We run two layout variants of this encoder, \emph{post-norm} (Vaswani-style $\bX'=\text{LN}(\bX+\text{Sub}(\bX))$) and \emph{pre-norm} ($\bX'=\bX+\text{Sub}(\text{LN}(\bX))$, \citealt{xiong2020lnorder}).
 
-\paragraph{SDPA-Large.} Eight-layer Transformer with $d_{\text{model}}=768$, $h=12$, $d_{\text{ff}}=3072$ (about 76M parameters), combining four modern training tricks: pre-norm residuals, RoPE for query/key rotation \citep{su2021roformer}, SwiGLU feed-forward blocks \citep{shazeer2020glu}, and per-channel LayerScale initialised at $10^{-4}$ \citep{touvron2021cait}. We refer to this as \emph{SDPA-Large} throughout the rest of the paper, not as a SOTA configuration: it is the largest encoder we trained, but it does not achieve state-of-the-art on this treebank.
+\paragraph{SDPA-Large.} Eight-layer Transformer with $d_{\text{model}}=768$, $h=12$, $d_{\text{ff}}=3072$ (about 76M parameters). It combines pre-norm residuals, RoPE for query/key rotation \citep{su2021roformer}, SwiGLU feed-forward blocks \citep{shazeer2020glu}, and per-channel LayerScale initialised at $10^{-4}$ \citep{touvron2021cait}. We call this encoder \emph{SDPA-Large} throughout the paper. The name only marks model size within our grid; it is not a state-of-the-art claim.
 
 \subsection{Attention layer}
 \label{sec:method-attention}
@@ -149,5 +125,5 @@ We compare three optimizers:
 \begin{itemize}[leftmargin=*, itemsep=2pt]
   \item \textbf{Adam}, $\beta_1{=}0.9$, $\beta_2{=}0.9$, $\epsilon{=}10^{-12}$, following \citet{dozat2017biaffine}; the unusual small $\beta_2$ is suited to the BiLSTM and we keep it for backward compatibility.
   \item \textbf{SGD} with $\eta{=}10^{-2}$, no momentum, no schedule. Included as a negative control.
-  \item \textbf{Muon} \citep{jordan2024muon}: each 2D non-embedding weight is updated via Newton--Schulz orthogonalization of its momentum buffer with per-tensor scale $\max(1,\sqrt{m/n})$. All other parameters (1D, embeddings) fall back to AdamW. Default $\eta_{\text{Muon}}{=}0.02$, $\eta_{\text{AdamW}}{=}3{\times}10^{-4}$. We package the routing logic in a wrapper so the standard \texttt{step}/\texttt{zero\_grad}/\texttt{state\_dict} interface remains intact.
+  \item \textbf{Muon} \citep{jordan2024muon}. Each 2D non-embedding weight is updated via Newton--Schulz orthogonalization of its momentum buffer with per-tensor scale $\max(1,\sqrt{m/n})$. All other parameters (1D, embeddings) fall back to AdamW. Default $\eta_{\text{Muon}}{=}0.02$, $\eta_{\text{AdamW}}{=}3{\times}10^{-4}$. We package the routing logic in a wrapper so the standard \texttt{step}/\texttt{zero\_grad}/\texttt{state\_dict} interface remains intact.
 \end{itemize}

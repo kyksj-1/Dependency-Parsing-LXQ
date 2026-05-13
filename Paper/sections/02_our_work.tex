@@ -4,7 +4,7 @@
 This section gives the matrix and the headline numbers before any technical content. Table~\ref{tab:matrix-overview} lists all fourteen runs that contribute to the analysis. The training corpus is the NLP\&CC 2013 Chinese dependency treebank with 8\,301 training sentences and 534 dev sentences (12\,987 evaluable arcs after punctuation filtering). Word vectors are the Chinese-Word-Vectors release of \citet{li2018cwv}. All runs share the same Biaffine head, MLP projections and MST decoder; only the encoder, the optimizer and the word vectors vary.
 
 \begin{table}[t]
-\caption{Fourteen-run training matrix on the same dev set. The Adam BiLSTM baseline reaches $86.43$ UAS; the only configuration that surpasses it is the BiLSTM trained with Muon for $100$ epochs under warmup--cosine, while the largest Transformer stops at $83.92$ UAS. Key take-away: under this 8.3K-sentence data scale, scaling the encoder underperforms scheduling the optimizer.}
+\caption{Fourteen-run training matrix on the same dev set. The Adam BiLSTM baseline reaches $86.43$ UAS. The only configuration that surpasses it is the BiLSTM trained with Muon for $100$ epochs under warmup and cosine decay, while the largest Transformer stops at $83.92$ UAS. Under this 8.3K-sentence data scale, scaling the encoder underperforms scheduling the optimizer.}
 \label{tab:matrix-overview}
 \centering
 \small

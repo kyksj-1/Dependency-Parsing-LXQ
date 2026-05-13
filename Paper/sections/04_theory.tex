@@ -1,7 +1,7 @@
 \section{Theory}
 \label{sec:theory}
 
-This section develops the three pieces of mathematical machinery that underlie the empirical observations in Section~\ref{sec:experiment}: the biaffine arc-and-relation scoring function, the rotary positional rotation used in the SOTA encoder, and the Newton--Schulz orthogonalization step at the core of the Muon optimizer. All notation is consistent across subsections.
+This section develops the three pieces of mathematical machinery that underlie the empirical observations in Section~\ref{sec:experiment}. We cover the biaffine arc-and-relation scoring function, the rotary positional rotation used in SDPA-Large, and the Newton--Schulz orthogonalization step at the core of the Muon optimizer. All notation is consistent across subsections.
 
 \subsection{Notation}
 
@@ -9,16 +9,16 @@ Let a sentence of length $L$ be encoded by the contextual encoder into a matrix 
 
 \subsection{Biaffine attention}
 
-The bilinear attention module of \citet{dozat2017biaffine} computes two independent score tensors: the unlabeled arc scores and the labeled relation scores. Both are derived from four projections of the encoder output, one for each role-by-prediction combination. We denote the arc projections by $\bH^{\text{arc-dep}}$ and $\bH^{\text{arc-head}}$, both in $\mathbb{R}^{L \times d_a}$, and the relation projections by $\bH^{\text{rel-dep}}$ and $\bH^{\text{rel-head}}$, both in $\mathbb{R}^{L \times d_r}$. The two projections per role are independent MLPs with a LeakyReLU non-linearity.
+The bilinear attention module of \citet{dozat2017biaffine} computes two independent score tensors, one for unlabeled arcs and one for labeled relations. Both are derived from four projections of the encoder output, one for each role-by-prediction combination. We denote the arc projections by $\bH^{\text{arc-dep}}$ and $\bH^{\text{arc-head}}$, both in $\mathbb{R}^{L \times d_a}$, and the relation projections by $\bH^{\text{rel-dep}}$ and $\bH^{\text{rel-head}}$, both in $\mathbb{R}^{L \times d_r}$. The two projections per role are independent MLPs with a LeakyReLU non-linearity.
 
-\paragraph{Arc score.} The score of an arc from dependent $i$ to head $j$ combines a bilinear term and a head-side bias term:
+\paragraph{Arc score.} The score of an arc from dependent $i$ to head $j$ combines a bilinear term and a head-side bias term,
 \begin{equation}
 \label{eq:arc-score}
 s^{\text{arc}}_{i \rightarrow j} = \big(\mathbf{h}^{\text{arc-dep}}_i\big)^\top \bW^{\text{arc}} \, \mathbf{h}^{\text{arc-head}}_j + \big(\mathbf{b}^{\text{arc}}\big)^\top \mathbf{h}^{\text{arc-head}}_j,
 \end{equation}
-where $\bW^{\text{arc}} \in \mathbb{R}^{d_a \times d_a}$ is the bilinear weight matrix and $\mathbf{b}^{\text{arc}} \in \mathbb{R}^{d_a}$ is a head-side bias vector. The first term measures the geometric compatibility between the dependent-role representation of $i$ and the head-role representation of $j$, while the second term encodes the prior preference of token $j$ for being a head independently of which dependent is being scored. The asymmetry between dependent and head roles is the central design choice that distinguishes biaffine attention from a vanilla dot-product attention: the same encoder vector $\mathbf{h}_i$ has a dual identity, once as a dependent and once as a head, and the two identities are separately projected before the bilinear interaction.
+where $\bW^{\text{arc}} \in \mathbb{R}^{d_a \times d_a}$ is the bilinear weight matrix and $\mathbf{b}^{\text{arc}} \in \mathbb{R}^{d_a}$ is a head-side bias vector. The first term measures the geometric compatibility between the dependent-role representation of $i$ and the head-role representation of $j$, while the second term encodes the prior preference of token $j$ for being a head independently of which dependent is being scored. The asymmetry between dependent and head roles is the central design choice that distinguishes biaffine attention from a vanilla dot-product attention. The same encoder vector $\mathbf{h}_i$ has a dual identity, once as a dependent and once as a head, and the two identities are separately projected before the bilinear interaction.
 
-\paragraph{Relation score.} Conditional on a candidate arc $i \rightarrow j$, the score of the relation label $r \in \{1, \ldots, R\}$ is the entry $(i, j, r)$ of a three-mode tensor
+\paragraph{Relation score.} Conditional on a candidate arc $i \rightarrow j$, the score of the relation label $r \in \{1, \ldots, R\}$ is the entry $(i, j, r)$ of a three-mode tensor,
 \begin{equation}
 \label{eq:rel-score}
 \mathbf{S}^{\text{rel}}_{i,j,r} = \big(\mathbf{h}^{\text{rel-dep}}_i\big)^\top \bW^{\text{rel}}_r \, \mathbf{h}^{\text{rel-head}}_j + \big(\mathbf{u}^{\text{rel}}_r\big)^\top \mathbf{h}^{\text{rel-dep}}_i + \big(\mathbf{v}^{\text{rel}}_r\big)^\top \mathbf{h}^{\text{rel-head}}_j + c^{\text{rel}}_r,
@@ -31,7 +31,7 @@ p^{\text{arc}}_{i\rightarrow j}
 =
 \frac{\exp S^{\text{arc}}_{i,j}}{\sum_{j'=0}^{L}\exp S^{\text{arc}}_{i,j'}} ,
 \]
-whereas the relation distribution is evaluated at the \emph{gold} head rather than the predicted head,
+whereas the relation distribution is evaluated at the \emph{gold} head instead of the predicted head,
 \[
 p^{\text{rel}}_{i,y^{\text{head}}_i,r}
 =
@@ -47,7 +47,7 @@ At inference time the arc decisions are not made by a per-position argmax but by
 
 \subsection{Rotary positional encoding}
 
-The SOTA Transformer encoder replaces sinusoidal positional encoding with the rotary positional encoding (RoPE) of \citet{su2021roformer}. RoPE treats each pair of consecutive coordinates inside a query or key vector as the real and imaginary parts of a complex number, and rotates the complex number by an angle that is proportional to the token position. Concretely, let $\mathbf{q}_p \in \mathbb{R}^{d_h}$ denote the query vector at position $p$, with $d_h$ even. We split $\mathbf{q}_p$ into $d_h / 2$ pairs of coordinates indexed by $k \in \{0, 1, \ldots, d_h/2 - 1\}$, define the per-pair frequency
+SDPA-Large replaces sinusoidal positional encoding with the rotary positional encoding (RoPE) of \citet{su2021roformer}. RoPE treats each pair of consecutive coordinates inside a query or key vector as the real and imaginary parts of a complex number, then rotates the complex number by an angle proportional to token position. Concretely, let $\mathbf{q}_p \in \mathbb{R}^{d_h}$ denote the query vector at position $p$, with $d_h$ even. We split $\mathbf{q}_p$ into $d_h / 2$ pairs of coordinates indexed by $k \in \{0, 1, \ldots, d_h/2 - 1\}$, define the per-pair frequency
 \begin{equation}
 \theta_k = 10\,000^{-2k/d_h},
 \end{equation}
@@ -72,4 +72,4 @@ where $\mu \in (0, 1)$ is the momentum coefficient, $\eta$ is the learning rate,
 \end{equation}
 with the polynomial coefficients $(a, b, c) = (3.4445, -4.7750, 2.0315)$ chosen so that the scalar polynomial $p(\sigma) = a\sigma + b\sigma^3 + c\sigma^5$ is approximately equal to $\mathrm{sign}(\sigma)$ on the interval $[0, 1]$. After five iterations the singular values of $\bX_5$ lie inside a tight band around one, and $\bX_5$ is treated as an orthogonalized version of the original momentum buffer.
 
-The key consequence of Equation~(\ref{eq:ns-iter}), and the reason Muon turns out to act as an implicit gradient clipper on unstable training regimes, is that the spectral norm of the orthogonalized update $\bO_t$ is uniformly bounded by approximately one regardless of the spectral norm of the original momentum buffer $\bM_{t+1}$. In a regime in which a post-norm Transformer would otherwise see an unbounded gradient amplification on the first few steps---which is the exact failure mode we observe in the post-norm SDPA runs of Section~\ref{sec:experiment}---the Muon update is automatically projected onto a unit-spectral-norm direction and the magnitude of the resulting parameter step is controlled by $\eta$ alone. This is, to our knowledge, the cleanest mathematical statement available of why Muon's effective step size is much closer to $\eta$ than to $\eta \cdot \| \bG_t \|$, and it is the basis of the empirical four-fold accuracy gap we report between Muon and Adam on the post-norm Transformer.
+Equation~(\ref{eq:ns-iter}) bounds the spectral norm of $\bO_t$ near one even when the momentum buffer $\bM_{t+1}$ has a large norm. This explains why Muon partially rescues the unstable post-norm SDPA runs in Section~\ref{sec:experiment}. The parameter step is controlled mainly by $\eta$, which makes an overly large Muon learning rate visible immediately.

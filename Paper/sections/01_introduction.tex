@@ -1,15 +1,15 @@
 \section{Introduction}
 \label{sec:intro}
 
-Dependency parsing assigns each token in a sentence a single head and a labeled grammatical relation, yielding a rooted tree. The deep biaffine parser of \citet{dozat2017biaffine} is the canonical graph-based design: a three-layer BiLSTM encodes the sentence into contextual representations $\bH\in\mathbb{R}^{L\times d}$, two MLPs project each token into head-role and dependent-role vectors, and a bilinear scorer produces an arc score matrix that is decoded into a tree by the Chu--Liu--Edmonds algorithm.
+Dependency parsing assigns each token in a sentence a single head and a labeled grammatical relation, yielding a rooted tree. The deep biaffine parser of \citet{dozat2017biaffine} is the canonical graph-based design. A three-layer BiLSTM encodes the sentence into contextual representations $\bH\in\mathbb{R}^{L\times d}$, two MLPs project each token into head-role and dependent-role vectors, and a bilinear scorer produces an arc score matrix that is decoded into a tree by the Chu--Liu--Edmonds algorithm.
 
 In the eight years since this design was published, the surrounding stack has changed substantially. Pretrained word vectors are now routinely 300-dimensional skip-gram embeddings trained on corpora orders of magnitude larger than those available in 2017 \citep{li2018cwv}. Transformer encoders with scaled dot-product attention \citep{vaswani2017attention} have replaced BiLSTMs in many NLP tasks. New optimizers such as Muon \citep{jordan2024muon}, and a battery of stability and capacity tricks for Transformers (pre-norm \citep{xiong2020lnorder}, RoPE \citep{su2021roformer}, SwiGLU \citep{shazeer2020glu}, LayerScale \citep{touvron2021cait}, EMA, warmup--cosine schedules) have become standard. We study how each of these axes affects parsing accuracy on a single fixed treebank, holding every other component of the pipeline constant.
 
 \paragraph{Scope.} This is an empirical report, not a methods paper. We do not propose new model components. We run a controlled grid of fourteen configurations on the same Chinese dependency treebank and report dev UAS, dev LAS and observed failure modes. The contributions are:
 \begin{itemize}[leftmargin=*, itemsep=2pt]
   \item A fourteen-run ablation matrix crossing word-vector dimensionality, word-vector domain, optimizer (Adam, SGD, Muon), and encoder (BiLSTM, matched-budget SDPA Transformer, larger SDPA Transformer with modern tricks).
-  \item Two reproducible failure modes documented in detail: post-norm SDPA without warmup collapses to near-random accuracy; Muon at its default learning rate of $0.02$ is roughly four times too large for our 9M-parameter SDPA encoder.
-  \item Released artifacts: training scripts, an auto-routing Muon wrapper that sends embeddings and biases to AdamW, the unit tests, and a preflight checklist.
+  \item Two reproducible failure modes. Post-norm SDPA without warmup collapses to near-random accuracy, and Muon at its default learning rate of $0.02$ is roughly four times too large for our 9M-parameter SDPA encoder.
+  \item Released artifacts including training scripts, an auto-routing Muon wrapper that sends embeddings and biases to AdamW, unit tests, and a preflight checklist.
 \end{itemize}
 
 The remainder of the paper is organized as Section~\ref{sec:our_work} (matrix overview and headline numbers), Section~\ref{sec:method} (encoder and optimizer variants), Section~\ref{sec:theory} (biaffine, RoPE, Muon Newton--Schulz), Section~\ref{sec:experiment} (the five comparison families), and Section~\ref{sec:conclusion} (closing remarks).

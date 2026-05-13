@@ -3,7 +3,7 @@
 
 This appendix collects the three training recipes used to produce the headline numbers of Section~\ref{sec:experiment}. Recipes are presented as INI-style key-value pairs that can be supplied verbatim to the project's \texttt{--override} command-line interface.
 
-\paragraph{Recipe A: BiLSTM baseline (Stage-1 style).}
+\paragraph{Recipe A, BiLSTM baseline (Stage-1 style).}
 
 \begin{verbatim}
 [Encoder]   type = lstm
@@ -17,7 +17,7 @@ This appendix collects the three training recipes used to produce the headline n
             batch_size = 32, update_batch_size = 4
 \end{verbatim}
 
-\paragraph{Recipe B: BiLSTM with Muon (new SOTA on this corpus).}
+\paragraph{Recipe B, BiLSTM with Muon (best run on this corpus).}
 
 \begin{verbatim}
 [Encoder]   type = lstm
@@ -29,7 +29,7 @@ This appendix collects the three training recipes used to produce the headline n
             min_lr_ratio = 0.05
 \end{verbatim}
 
-\paragraph{Recipe C: 76M SDPA Transformer (best modern stack we tested).}
+\paragraph{Recipe C, 76M SDPA Transformer (largest encoder we tested).}
 
 \begin{verbatim}
 [Encoder]   type = transformer_large
