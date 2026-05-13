@@ -10,7 +10,7 @@ Figure~\ref{fig:pipeline} summarizes the parser. Word and POS tag embeddings are
   \centering
   \resizebox{\textwidth}{!}{%
   \begin{tikzpicture}[
-    font=\small,
+    font=\normalsize,
     >={Latex[length=2mm,width=1.6mm]},
     box/.style={rounded corners=2pt, draw, line width=0.45pt, inner sep=3.2pt, align=center, minimum height=7mm},
     group/.style={rounded corners=4pt, draw, dashed, line width=0.55pt, inner sep=3mm},
@@ -29,15 +29,15 @@ Figure~\ref{fig:pipeline} summarizes the parser. Word and POS tag embeddings are
   ]
 
   % ================= 1. Embedding Stack (压缩了X轴间距) =================
-  \node[input] (words) at (0, 1.9) {Words\\$(B,L)$};
-  \node[input] (tags)  at (0, -2.4) {POS tags\\$(B,L)$};
+  \node[input] (words) at (0, 2.3) {Words\\$(B,L)$};
+  \node[input] (tags)  at (0, -3.0) {POS tags\\$(B,L)$};
 
-  \node[embed]         (wemb) at (2.2, 3.0) {learned word\\embedding};
-  \node[embed, dashed] (xemb) at (2.2, 0.8) {frozen external\\word vector};
-  \node[tag]           (temb) at (2.2, -2.4) {POS\\embedding};
+  \node[embed]         (wemb) at (2.2, 3.8) {learned word\\embedding};
+  \node[embed, dashed] (xemb) at (2.2, 1.0) {frozen external\\word vector};
+  \node[tag]           (temb) at (2.2, -3.0) {POS\\embedding};
 
-  \node[circle, draw, inner sep=0.5pt, minimum size=4.6mm] (sum) at (4.0, 1.9) {$+$};
-  \node[stage, text width=28mm] (lex) at (6.2, -0.25) {lexical feature\\$[\text{word}{+}\text{ext};\text{tag}]$};
+  \node[circle, draw, inner sep=0.5pt, minimum size=4.6mm] (sum) at (4.0, 2.3) {$+$};
+  \node[stage, text width=28mm] (lex) at (6.2, -0.3) {lexical feature\\$[\text{word}{+}\text{ext};\text{tag}]$};
 
   % Embedding Arrows (修改为了平滑曲线)
   \draw[arr] (words.east) to[out=0, in=180] (wemb.west);
@@ -51,11 +51,11 @@ Figure~\ref{fig:pipeline} summarizes the parser. Word and POS tag embeddings are
   \draw[arr] (temb.east) to[out=0, in=180] (lex.west);
 
   % ================= 2. Encoder Slot (向右平移，避免重叠) =================
-  \node[enc, text width=24mm] (e1) at (10.5, 2.4) {BiLSTM\\3 layers};
-  \node[enc, text width=24mm] (e2) at (10.5, -0.25) {SDPA-9M\\4 layers};
-  \node[enc, text width=24mm] (e3) at (10.5, -2.9) {SDPA-Large\\8 layers};
+  \node[enc, text width=24mm] (e1) at (10.5, 3.1) {BiLSTM\\3 layers};
+  \node[enc, text width=24mm] (e2) at (10.5, -0.3) {SDPA-9M\\4 layers};
+  \node[enc, text width=24mm] (e3) at (10.5, -3.7) {SDPA-Large\\8 layers};
 
-  \node[stage, text width=29mm] (hout) at (14.6, -0.25) {$\mathbf{H} \in \mathbb{R}^{B\times L\times800}$\\shared interface};
+  \node[stage, text width=29mm] (hout) at (14.6, -0.3) {$\mathbf{H} \in \mathbb{R}^{B\times L\times800}$\\shared interface};
 
   % Encoder Arrows
   \draw[thinarr] (lex.east) to[out=0,in=180] (e1.west);
@@ -67,10 +67,10 @@ Figure~\ref{fig:pipeline} summarizes the parser. Word and POS tag embeddings are
   \draw[arr] (e3.east) to[out=0, in=180] ([yshift=-3mm]hout.west);
 
   % ================= 3. Head/Dependent MLPs (增加高度，垂直单列排布) =================
-  \node[mlp] (ad) at (17.8, 2.6) {arc-dep};
-  \node[mlp] (ah) at (17.8, 0.8) {arc-head};
-  \node[mlp] (rd) at (17.8, -1.0) {rel-dep};
-  \node[mlp] (rh) at (17.8, -2.8) {rel-head};
+  \node[mlp] (ad) at (17.8, 3.4) {arc-dep};
+  \node[mlp] (ah) at (17.8, 1.1) {arc-head};
+  \node[mlp] (rd) at (17.8, -1.2) {rel-dep};
+  \node[mlp] (rh) at (17.8, -3.5) {rel-head};
 
   % MLP Arrows: 使用"单干分支"直角走线，更加整洁
   \coordinate (hout_split) at ([xshift=6.5mm]hout.east);
@@ -81,8 +81,8 @@ Figure~\ref{fig:pipeline} summarizes the parser. Word and POS tag embeddings are
   \draw[arr] (hout_split) |- (rh.west);
 
   % ================= 4. Biaffine Scorer (增加高度) =================
-  \node[score, text width=40mm] (arc) at (22.2, 1.7) {$s^{arc}_{i\to j}$\\biaffine arc score};
-  \node[score, text width=40mm] (rel) at (22.2, -1.9) {$s^{rel}_{i,j,r}$\\biaffine relation score};
+  \node[score, text width=40mm] (arc) at (22.2, 2.3) {$s^{arc}_{i\to j}$\\biaffine arc score};
+  \node[score, text width=40mm] (rel) at (22.2, -2.4) {$s^{rel}_{i,j,r}$\\biaffine relation score};
 
   % Scorer Arrows: 稍微错开落点，避免箭头完全叠在一起
   \draw[arr] (ad.east) to[out=0, in=180] ([yshift=3mm]arc.west);
@@ -91,16 +91,16 @@ Figure~\ref{fig:pipeline} summarizes the parser. Word and POS tag embeddings are
   \draw[arr] (rh.east) to[out=0, in=180] ([yshift=-3mm]rel.west);
 
   % ================= 5. Outputs, Loss & Optimizers =================
-  \node[stage] (mst) at (26.5, 1.7) {MST\\decoder};
-  \node[stage, font=\small\bfseries] (tree) at (28.8, 1.7) {dependency\\tree};
+  \node[stage] (mst) at (26.5, 2.3) {MST\\decoder};
+  \node[stage, font=\normalsize\bfseries] (tree) at (28.8, 2.3) {dependency\\tree};
 
   % 修改点：将 Loss 方框向右移动，放置于 MST 下方
-  \node[train, text width=42mm] (loss) at (27.5, -0.9) {$\mathcal{L}=\mathcal{L}_{arc}+\mathcal{L}_{rel}$\\gold heads supervise relation labels};
+  \node[train, text width=42mm] (loss) at (27.5, -1.1) {$\mathcal{L}=\mathcal{L}_{arc}+\mathcal{L}_{rel}$\\gold heads supervise relation labels};
 
   % 修改点：整体下移优化器，对齐 Loss
-  \node[opt] (adam) at (25.8, -4.2) {Adam};
-  \node[opt] (sgd)  at (27.5, -4.2) {SGD};
-  \node[opt] (muon) at (29.2, -4.2) {Muon};
+  \node[opt] (adam) at (25.8, -5.2) {Adam};
+  \node[opt] (sgd)  at (27.5, -5.2) {SGD};
+  \node[opt] (muon) at (29.2, -5.2) {Muon};
 
   % Final Arrows
   \draw[arr] (arc.east) -- (mst.west);
@@ -117,11 +117,11 @@ Figure~\ref{fig:pipeline} summarizes the parser. Word and POS tag embeddings are
 
   % ================= 6. Background Groups =================
   \begin{pgfonlayer}{background}
-    \node[group, draw=blue!55!black, fit=(words)(tags)(wemb)(xemb)(temb)(sum)(lex), label={[blue!55!black,font=\small\bfseries]above:Embedding stack}] {};
-    \node[group, draw=purple!65!black, fit=(e1)(e2)(e3)(hout), label={[purple!65!black,font=\small\bfseries]above:Encoder slot}] {};
-    \node[group, draw=teal!70!black, fit=(ad)(ah)(rd)(rh), label={[teal!70!black,font=\small\bfseries]above:Head/Dependent MLPs}] {};
-    \node[group, draw=red!70!black, fit=(arc)(rel), label={[red!70!black,font=\small\bfseries]above:Biaffine scorer}] {};
-    \node[group, draw=green!60!black, fit=(adam)(sgd)(muon), label={[green!60!black,font=\small\bfseries]below:Optimizers}] {};
+    \node[group, draw=blue!55!black, fit=(words)(tags)(wemb)(xemb)(temb)(sum)(lex), label={[blue!55!black,font=\normalsize\bfseries]above:Embedding stack}] {};
+    \node[group, draw=purple!65!black, fit=(e1)(e2)(e3)(hout), label={[purple!65!black,font=\normalsize\bfseries]above:Encoder slot}] {};
+    \node[group, draw=teal!70!black, fit=(ad)(ah)(rd)(rh), label={[teal!70!black,font=\normalsize\bfseries]above:Head/Dependent MLPs}] {};
+    \node[group, draw=red!70!black, fit=(arc)(rel), label={[red!70!black,font=\normalsize\bfseries]above:Biaffine scorer}] {};
+    \node[group, draw=green!60!black, fit=(adam)(sgd)(muon), label={[green!60!black,font=\normalsize\bfseries]below:Optimizers}] {};
   \end{pgfonlayer}
 
   \end{tikzpicture}

@@ -487,3 +487,6 @@ bz2 解压 + 重命名为 sgns.<corpus>.300d.txt 格式。**当前未做。**
 - 压缩 Theory 开篇,避免第四章开头铺垫过多。
 - 重写未运行变体段落,明确主因是本任务参数量和数据量都太小,不适合 MoE/linear attention/mHC/gated attention 等大规模技巧。
 - 将 `fig:pipeline` 内文字从 `\scriptsize` 调大到 `\small`,并同步放大分组标题字体,提高打印/PDF 中的可读性。
+- 将 `fig:pipeline` 内文字进一步调到 `\normalsize`,并拉大 TikZ 纵向坐标范围,让图在同宽度下更高、更舒展。
+- 将原 Experiments 末尾的 `Result conclusion` 拆成独立 `Results` section,放在 Experiments 与 Conclusion 之间。
+- 在 Results 中集中写清楚本文发现和思考: 小数据下 BiLSTM 归纳偏置有效,预训练词向量的有无比维度/领域更关键,Muon 需要长 schedule 才超过 Adam。

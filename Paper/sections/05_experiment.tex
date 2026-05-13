@@ -93,10 +93,3 @@ Two observations stand out.
 \label{sec:exp-large}
 
 The SDPA-Large configuration combines pre-norm, RoPE, SwiGLU, LayerScale, EMA, a 1500-step warmup, and cosine decay to $1\%$ of peak on a 76M-parameter encoder. The peak dev UAS is $83.92$, which is $2.51$ below the BiLSTM Muon baseline. The marginal accuracy in the last 50 epochs is roughly $0.05$ UAS per epoch, suggesting that the model has saturated on the available training signal. Closing the remaining gap likely requires more labeled data or initialization from a large-scale pretrained backbone such as BERT-base-Chinese. Both lie outside the scope of this ablation.
-
-\subsection{Result conclusion}
-\label{sec:exp-result-conclusion}
-
-The main empirical conclusion is not that Transformers are weak, but that the inductive bias/data-scale match dominates raw capacity in this assignment setting. The BiLSTM encoder encodes locality, order and short dependency chains directly, so 8.3K labeled sentences are enough to tune the biaffine head reliably. The SDPA encoders have a more flexible global interaction pattern, but that flexibility has to be learned from the same small supervised signal; without pre-norm and warmup it collapses, and even with a 76M-parameter modern stack it remains below the recurrent baseline.
-
-The optimizer story is similarly conditional. Adam is the safest short-run default, SGD is a useful negative control, and Muon becomes attractive only when the schedule gives its orthogonalized updates enough time to refine the solution. For this project, the strongest practical recipe is simple. Keep the original BiLSTM--biaffine architecture, use pretrained word vectors, and spend the engineering budget on a stable Muon schedule and careful logging instead of a larger Transformer trained from scratch.
