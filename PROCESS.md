@@ -490,3 +490,8 @@ bz2 解压 + 重命名为 sgns.<corpus>.300d.txt 格式。**当前未做。**
 - 将 `fig:pipeline` 内文字进一步调到 `\normalsize`,并拉大 TikZ 纵向坐标范围,让图在同宽度下更高、更舒展。
 - 将原 Experiments 末尾的 `Result conclusion` 拆成独立 `Results` section,放在 Experiments 与 Conclusion 之间。
 - 在 Results 中集中写清楚本文发现和思考: 小数据下 BiLSTM 归纳偏置有效,预训练词向量的有无比维度/领域更关键,Muon 需要长 schedule 才超过 Adam。
+
+### 2026-05-13 根目录 README 与许可证
+
+- 新增根目录 `README.md`,概述项目做了什么、关键入口和目录、Hugging Face 产物地址、主要结果和后续方向。
+- 将根目录 `LICENSE` 从 Apache-2.0 替换为 MIT License,满足最终发布要求。
