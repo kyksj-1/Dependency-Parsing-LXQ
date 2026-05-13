@@ -16,16 +16,21 @@
 \usepackage{xcolor}
 \usepackage{graphicx}
 \usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{positioning,shapes.geometric,arrows.meta,calc,fit,backgrounds}
 
-% 数学宏
-\newcommand{\bW}{\mathbf{W}}
-\newcommand{\bH}{\mathbf{H}}
-\newcommand{\bQ}{\mathbf{Q}}
-\newcommand{\bK}{\mathbf{K}}
-\newcommand{\bV}{\mathbf{V}}
-\newcommand{\bO}{\mathbf{O}}
-\newcommand{\bI}{\mathbf{I}}
+% 数学宏 (mathbf 加粗矩阵 / 向量)
+\newcommand{\bA}{\mathbf{A}}
 \newcommand{\bG}{\mathbf{G}}
+\newcommand{\bH}{\mathbf{H}}
+\newcommand{\bI}{\mathbf{I}}
+\newcommand{\bK}{\mathbf{K}}
+\newcommand{\bM}{\mathbf{M}}
+\newcommand{\bO}{\mathbf{O}}
+\newcommand{\bQ}{\mathbf{Q}}
+\newcommand{\bS}{\mathbf{S}}
+\newcommand{\bV}{\mathbf{V}}
+\newcommand{\bW}{\mathbf{W}}
 \newcommand{\bX}{\mathbf{X}}
 
 \title{Revisiting Biaffine Dependency Parsing:\\
@@ -60,10 +65,11 @@ An Empirical Study of Encoders, Optimizers and Word Vectors}
 
 \input{sections/06_conclusion.tex}
 
-\bibliographystyle{plainnat}
-\bibliography{references}
-
 \appendix
 \input{sections/A_training_recipe.tex}
+
+\clearpage
+\bibliographystyle{plainnat}
+\bibliography{references}
 
 \end{document}

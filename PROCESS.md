@@ -460,3 +460,12 @@ bz2 解压 + 重命名为 sgns.<corpus>.300d.txt 格式。**当前未做。**
 - 拆分 `Paper/sections/` 6 个 .tex: intro / our_work / method / theory / experiment / conclusion
 - 参考文献用 natbib + 真实引用 (Dozat 2017 / Vaswani 2017 / Loshchilov 2017 / Keller Jordan 2024 / Touvron 2021 等)
 
+### 2026-05-13 报告润色与 LaTeX 修复
+
+- 按用户要求把 pipeline figure 保持为 LaTeX 内嵌 TikZ,并用 `\resizebox{\textwidth}{!}{...}` 约束版心,避免图形越界。
+- 修复 `tab:matrix-overview` 视觉居中问题: 外层使用 `\resizebox{\textwidth}{!}{...}`, 表格列格式改为 `@{}lllrr@{}` 去掉左右额外边距；同一提醒已写入 `D:\发送给别人\lxq\.claude\MEMORY.md`。
+- References 前加入 `\clearpage`,并把 appendix 移到 bibliography 前,确保 References 独立新页且位于全文末尾。
+- 重写 Theory 中 loss 的 denote: 显式定义 gold head / gold relation、arc softmax、relation softmax、teacher forcing 以及非 padding/非标点 token 集合。
+- 修正 Gated Attention 引用: 不再写 Anonymous,改为 Qiu et al. 2025, NeurIPS 2025 Best Paper, Alibaba/Qwen 团队。
+- 在 Experiments 末尾增加 `Result conclusion`,补充 BiLSTM 归纳偏置、Transformer 数据尺度瓶颈和 Muon schedule 的讨论深度。
+- 在论文正文 Experiments/Protocol 中补充硬件与 artifact URL: 服务器 4 A800 80GB 集群、GitHub 代码仓库和 Hugging Face 模型/Output 仓库。

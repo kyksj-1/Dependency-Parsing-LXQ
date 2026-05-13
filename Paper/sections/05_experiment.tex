@@ -8,6 +8,8 @@ This section reports the five comparison families that the matrix of Section~\re
 
 All runs share an identical training harness. Gradient accumulation reaches an effective batch size of 128; gradients are $\ell_2$-clipped at 9 for BiLSTM runs and left unclipped for Muon-trained Transformer runs \citep{jordan2024muon}. The pretrained embedding table is frozen. Reported numbers are dev UAS and dev LAS, computed by the standard evaluator with punctuation filtered out. Each configuration is a single seed; within-seed variance on this corpus is below $0.2$ UAS for the few runs we re-executed.
 
+\paragraph{Hardware and released artifacts.} All compute-heavy training runs were executed on server 4, an A800 machine with eight 80GB GPUs, CUDA 12.9, 1TB RAM, and an 85TB shared data volume mounted at \texttt{/essfs100}. The code repository is released at \url{https://github.com/kyksj-1/Dependency-Parsing-LXQ}; the full \texttt{Output/} directory, including checkpoints, logs, plots and run summaries, is released separately at \url{https://huggingface.co/kyksj/Dependency-Parsing} to keep large binary artifacts out of GitHub.
+
 \subsection{A. Word vector dimensionality}
 \label{sec:exp-dim}
 
@@ -81,3 +83,10 @@ Two observations stand out:
 \label{sec:exp-sota}
 
 The SDPA-Large configuration combines all modern training tricks we tested (pre-norm, RoPE, SwiGLU, LayerScale, EMA, 1500-step warmup, cosine decay to $1\%$ of peak) on a 76M-parameter encoder. The peak dev UAS is $83.92$, which is $2.51$ below the BiLSTM Muon baseline. The marginal accuracy in the last 50 epochs is roughly $0.05$ UAS per epoch, suggesting the model has saturated on the available training signal. Closing the remaining gap likely requires either an order-of-magnitude increase in labeled data or initialization from a large-scale pretrained backbone such as BERT-base-Chinese; both lie outside the scope of this ablation.
+
+\subsection{Result conclusion}
+\label{sec:exp-result-conclusion}
+
+The main empirical conclusion is not that Transformers are weak, but that the inductive bias/data-scale match dominates raw capacity in this assignment setting. The BiLSTM encoder encodes locality, order and short dependency chains directly, so 8.3K labeled sentences are enough to tune the biaffine head reliably. The SDPA encoders have a more flexible global interaction pattern, but that flexibility has to be learned from the same small supervised signal; without pre-norm and warmup it collapses, and even with a 76M-parameter modern stack it remains below the recurrent baseline.
+
+The optimizer story is similarly conditional. Adam is the safest short-run default, SGD is a useful negative control rather than a competitive parser optimizer, and Muon becomes attractive only when the schedule gives its orthogonalized updates enough time to refine the solution. For this project, the strongest practical recipe is therefore simple: keep the original BiLSTM--biaffine architecture, use pretrained word vectors, and spend the engineering budget on a stable Muon schedule and careful logging rather than on a larger Transformer trained from scratch.

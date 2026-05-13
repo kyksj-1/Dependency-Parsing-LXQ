@@ -25,12 +25,23 @@ where $\bW^{\text{arc}} \in \mathbb{R}^{d_a \times d_a}$ is the bilinear weight 
 \end{equation}
 where $\bW^{\text{rel}}_r \in \mathbb{R}^{d_r \times d_r}$, $\mathbf{u}^{\text{rel}}_r, \mathbf{v}^{\text{rel}}_r \in \mathbb{R}^{d_r}$ and $c^{\text{rel}}_r \in \mathbb{R}$ are the per-relation parameters of the trilinear form. Equation~(\ref{eq:rel-score}) is the natural generalization of Equation~(\ref{eq:arc-score}) to a labeled setting, with separate bias terms for both the dependent side and the head side.
 
-\paragraph{Loss.} The arc loss is the per-position cross entropy of the gold head against the row of $\mathbf{S}^{\text{arc}}$, and the relation loss is the per-position cross entropy of the gold relation against the slice of $\mathbf{S}^{\text{rel}}$ at the \emph{gold} head---teacher forcing in the original sense---so that the relation classifier never has to back-propagate through an incorrect head decision. Writing $y^{\text{head}}_i$ for the gold head of token $i$ and $y^{\text{rel}}_i$ for its gold relation, the joint loss reads
+\paragraph{Loss.} The parser is trained with two cross-entropy terms, one for choosing a head and one for naming the dependency relation once the head is fixed. For token $i$, let $y^{\text{head}}_i \in \{0,\ldots,L\}$ be its gold head index, where $0$ denotes the artificial root, and let $y^{\text{rel}}_i \in \{1,\ldots,R\}$ be its gold relation label. The arc distribution is a row-wise softmax over all candidate heads,
+\[
+p^{\text{arc}}_{i\rightarrow j}
+=
+\frac{\exp S^{\text{arc}}_{i,j}}{\sum_{j'=0}^{L}\exp S^{\text{arc}}_{i,j'}} ,
+\]
+whereas the relation distribution is evaluated at the \emph{gold} head rather than the predicted head,
+\[
+p^{\text{rel}}_{i,y^{\text{head}}_i,r}
+=
+\frac{\exp S^{\text{rel}}_{i,y^{\text{head}}_i,r}}{\sum_{r'=1}^{R}\exp S^{\text{rel}}_{i,y^{\text{head}}_i,r'}} .
+\]
+This teacher-forced relation loss keeps the label classifier from learning through an incorrect arc decision during training. Over the set $\mathcal{T}$ of non-padding, non-punctuation tokens in a minibatch, the joint loss is
 \begin{equation}
 \label{eq:loss}
-\mathcal{L} = \frac{1}{N} \sum_{i=1}^{N} \Big[ -\log p^{\text{arc}}_{i \rightarrow y^{\text{head}}_i} - \log p^{\text{rel}}_{i, y^{\text{head}}_i, y^{\text{rel}}_i} \Big],
+\mathcal{L} = \frac{1}{|\mathcal{T}|} \sum_{i\in\mathcal{T}} \Big[ -\log p^{\text{arc}}_{i \rightarrow y^{\text{head}}_i} - \log p^{\text{rel}}_{i, y^{\text{head}}_i, y^{\text{rel}}_i} \Big].
 \end{equation}
-where $N$ is the total number of non-padding tokens in the batch and $p^{\text{arc}}$ and $p^{\text{rel}}$ denote the softmax-normalized counterparts of $\mathbf{S}^{\text{arc}}$ and $\mathbf{S}^{\text{rel}}$.
 
 At inference time the arc decisions are not made by a per-position argmax but by an MST decoder on the matrix of arc scores, which guarantees that the predicted edges form a valid rooted tree even when the locally most probable head choices are inconsistent.
 

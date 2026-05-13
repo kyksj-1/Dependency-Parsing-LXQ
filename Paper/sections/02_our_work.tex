@@ -8,7 +8,8 @@ This section gives the matrix and the headline numbers before any technical cont
 \label{tab:matrix-overview}
 \centering
 \small
-\begin{tabular}{lllrr}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lllrr@{}}
 \toprule
 Block & Encoder & Optimizer / schedule & Dev UAS & Dev LAS \\
 \midrule
@@ -30,6 +31,7 @@ Stage-2 SDPA-Large     & Transformer 76M   & Muon, 100ep, warmup+cosine+EMA     
 \textbf{Stage-2 BiLSTM} & \textbf{BiLSTM}   & \textbf{Muon, 100ep, warmup+cosine} & \textbf{86.93} & \textbf{68.37} \\
 \bottomrule
 \end{tabular}
+}
 \end{table}
 
 \paragraph{Headline numbers.}
@@ -39,4 +41,4 @@ Stage-2 SDPA-Large     & Transformer 76M   & Muon, 100ep, warmup+cosine+EMA     
   \item \textbf{SDPA-9M post-norm without warmup collapses} to 12.20 UAS (Adam) or 53.35 UAS (Muon); switching to pre-norm + warmup recovers to 81--82 UAS.
 \end{itemize}
 
-\paragraph{Variants we considered but did not run.} Mixture-of-Experts on the FFN, linear-attention substitutes, multi-head causal connections of \citet{deepseekteam2025mhc}, and the gated-attention variant of \citet{openreview2025gateattn}. Each targets a regime (much larger data, much longer sequences, or much larger pretraining) that does not match our 8.3K-sentence supervised treebank, and we omit them.
+\paragraph{Variants we considered but did not run.} Mixture-of-Experts on the FFN, linear-attention substitutes, multi-head causal connections of \citet{deepseekteam2025mhc}, and gated attention for large language models \citep{qiu2025gatedattention}. The last of these is a NeurIPS 2025 Best Paper from the Alibaba/Qwen line of work and is highly relevant to robust Transformer training, but its evidence comes from billion-parameter LLMs trained on trillion-token corpora. Each omitted variant therefore targets a regime (much larger data, much longer sequences, or much larger pretraining) that does not match our 8.3K-sentence supervised treebank.
