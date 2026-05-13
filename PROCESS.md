@@ -486,3 +486,4 @@ bz2 解压 + 重命名为 sgns.<corpus>.300d.txt 格式。**当前未做。**
 - 将 References 调整到 appendix 前,且从 References 前 `\clearpage` 重新开页。
 - 压缩 Theory 开篇,避免第四章开头铺垫过多。
 - 重写未运行变体段落,明确主因是本任务参数量和数据量都太小,不适合 MoE/linear attention/mHC/gated attention 等大规模技巧。
+- 将 `fig:pipeline` 内文字从 `\scriptsize` 调大到 `\small`,并同步放大分组标题字体,提高打印/PDF 中的可读性。

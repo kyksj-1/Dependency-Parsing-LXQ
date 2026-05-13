@@ -10,7 +10,7 @@ Figure~\ref{fig:pipeline} summarizes the parser. Word and POS tag embeddings are
   \centering
   \resizebox{\textwidth}{!}{%
   \begin{tikzpicture}[
-    font=\scriptsize,
+    font=\small,
     >={Latex[length=2mm,width=1.6mm]},
     box/.style={rounded corners=2pt, draw, line width=0.45pt, inner sep=3.2pt, align=center, minimum height=7mm},
     group/.style={rounded corners=4pt, draw, dashed, line width=0.55pt, inner sep=3mm},
@@ -92,7 +92,7 @@ Figure~\ref{fig:pipeline} summarizes the parser. Word and POS tag embeddings are
 
   % ================= 5. Outputs, Loss & Optimizers =================
   \node[stage] (mst) at (26.5, 1.7) {MST\\decoder};
-  \node[stage, font=\scriptsize\bfseries] (tree) at (28.8, 1.7) {dependency\\tree};
+  \node[stage, font=\small\bfseries] (tree) at (28.8, 1.7) {dependency\\tree};
 
   % 修改点：将 Loss 方框向右移动，放置于 MST 下方
   \node[train, text width=42mm] (loss) at (27.5, -0.9) {$\mathcal{L}=\mathcal{L}_{arc}+\mathcal{L}_{rel}$\\gold heads supervise relation labels};
@@ -117,11 +117,11 @@ Figure~\ref{fig:pipeline} summarizes the parser. Word and POS tag embeddings are
 
   % ================= 6. Background Groups =================
   \begin{pgfonlayer}{background}
-    \node[group, draw=blue!55!black, fit=(words)(tags)(wemb)(xemb)(temb)(sum)(lex), label={[blue!55!black,font=\bfseries]above:Embedding stack}] {};
-    \node[group, draw=purple!65!black, fit=(e1)(e2)(e3)(hout), label={[purple!65!black,font=\bfseries]above:Encoder slot}] {};
-    \node[group, draw=teal!70!black, fit=(ad)(ah)(rd)(rh), label={[teal!70!black,font=\bfseries]above:Head/Dependent MLPs}] {};
-    \node[group, draw=red!70!black, fit=(arc)(rel), label={[red!70!black,font=\bfseries]above:Biaffine scorer}] {};
-    \node[group, draw=green!60!black, fit=(adam)(sgd)(muon), label={[green!60!black,font=\bfseries]below:Optimizers}] {};
+    \node[group, draw=blue!55!black, fit=(words)(tags)(wemb)(xemb)(temb)(sum)(lex), label={[blue!55!black,font=\small\bfseries]above:Embedding stack}] {};
+    \node[group, draw=purple!65!black, fit=(e1)(e2)(e3)(hout), label={[purple!65!black,font=\small\bfseries]above:Encoder slot}] {};
+    \node[group, draw=teal!70!black, fit=(ad)(ah)(rd)(rh), label={[teal!70!black,font=\small\bfseries]above:Head/Dependent MLPs}] {};
+    \node[group, draw=red!70!black, fit=(arc)(rel), label={[red!70!black,font=\small\bfseries]above:Biaffine scorer}] {};
+    \node[group, draw=green!60!black, fit=(adam)(sgd)(muon), label={[green!60!black,font=\small\bfseries]below:Optimizers}] {};
   \end{pgfonlayer}
 
   \end{tikzpicture}
